@@ -22,6 +22,7 @@ CMakeUserPresets.json
 [Rr]elease/
 [Rr]eleases/
 [Bb]uild/
+build-*/
 x64/
 x86/
 bld/
@@ -29,6 +30,21 @@ bin/
 [Bb]in/
 [Oo]bj/
 cmake/
+
+# Phase 7 release tree (date-stamped output of build-release.sh)
+/build/mister-release/
+
+# Engine/launcher outputs at repo root (engine writes these when run from
+# the source tree during host smoke runs)
+/log.txt
+/Settings.ini
+/gamecontrollerdb.txt
+/SGame.bin
+/Replay_*.bin
+
+# Phase 0 tooling logs
+/docker-bootstrap-*.log
+tools/mister/*.log
 
 # safety
 *.rsdk
