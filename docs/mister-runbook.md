@@ -482,6 +482,81 @@ prefer the cairo-free copies automatically.
   ship DEBUG-flavor binaries with diagnostics on. Phase 0 ships Release
   because we are verifying toolchain plumbing, not investigating behavior.
 
+### Phase 6 — Pacer + FPS overlay (on-device validation procedure)
+
+Phase 6 landed the closed-loop frame pacer, precise-delay sleep, on-canvas
+FPS overlay, and profile scopes. Mac host + armhf cross builds verified
+clean. The on-device Step-4 integration test is **user-gated** — it
+requires Phase 5 gameplay to be observable (Sonic Mania.rbf booted from
+the `_Other/` menu and `Data.rsdk` present on the SD card).
+
+**Build + deploy (telemetry flavor, per feedback-always-telemetry.md):**
+
+```sh
+# From repo root
+tools/mister/build-game.sh --flavor telemetry
+tools/mister/deploy-to-mister.sh --flavor telemetry
+```
+
+**Boot + log tail:**
+
+```sh
+ssh root@192.168.1.188 'tail -F /tmp/sonicmania.log' &
+# Launch Sonic Mania from _Other/ menu on MiSTer front panel.
+```
+
+**Success criteria (on-device, once gameplay is visible):**
+
+1. Within ~1 second of launch, the log shows:
+   `MiSTerRenderDevice::InitFPSCap: target=16666666ns (60 Hz)`
+   (target will differ if `settings.ini [Video]refreshRate` overrides 60.)
+2. Within ~2 seconds of launch, the log shows exactly one of:
+   - `[MiSTerPacer] vsync feedback engaged (delta=... us, seq=...)`
+     ← closed-loop lock acquired. SUCCESS.
+   - No log line within 10 s → HPS wrapper is not writing seq word at
+     DDR3 offset 0x44. Probe with `devmem2 0x3A000044` — seq should be
+     monotonically advancing. If zero or stuck, the wrapper needs the
+     feedback-write port from 3sx (see
+     `3sx-mister/vendor/Main_MiSTer/thirdsarm_wrapper.cpp:2273-2290`).
+     Block here; do not proceed.
+   - Repeating `vsync feedback stale, falling back to open-loop` →
+     wrapper writes seq once then stops. Same wrapper bug.
+3. On-canvas overlay top-left corner reads green `"60"` (mode 0, simple)
+   during steady-state menu / gameplay.
+4. Press **F6** — overlay switches to mode 1 detailed:
+   `60 u:X.X r:X.X p:X.X CL:e+NNNN` (u=update ms, r=raster ms, p=present
+   ms, CL=closed-loop phase error in μs; `OL:` if feedback disengaged).
+5. Press **F3** — overlay toggles off. Press again — comes back.
+6. Press **F12** — log dumps pacer jitter stats:
+   `MiSTerPacer jitter over NNN frames: max=... avg=... late(>500us)=N phase_err=... CL`
+7. `|CL:e|` ≤ 500 μs after 5 seconds on a static screen (title / pause).
+8. Sustained 60 fps ±1 for 60 s on test stages — captured via F12 dumps
+   at T=0, T=60s, T=120s across Green Hill Zone 1, Studiopolis Act 1,
+   Titanic Monarch Act 1 (devMenu-loaded with F1/F2+F5 per upstream).
+
+**If feedback never engages but FPS shows 60:** open-loop pacer is
+working; closed-loop is not. File a follow-up to investigate whether the
+wrapper's feedback-write code was ported from 3sx. Phase 6 exit criterion
+#4 (closed-loop engagement within 500 ms) is blocked, but #2 (60 fps
+sustained) can still be measured.
+
+**If overlay is not visible but no crash:** check `currentScreen ==
+&screens[0]` at FlipScreen time. FlipScreen() gates the DrawDevString
+call on that equality to avoid writing into a null framebuffer during
+early-boot frames.
+
+**Clean-flavor regression:** `--flavor clean` (ENABLE_PERF_TELEMETRY=OFF)
+still ships the overlay code path but defaults `showFPSOverlay = false`.
+F3 still toggles it on (simple integer FPS only — the detailed string
+references telemetry-only `mister_perf_avg_scope_ms` which is an inline
+no-op in clean).
+
+**Overclock (Phase 6 Step 6, DEFERRED):** not wired in. Helpers
+`mister_pacer_apply_arm_clock()` + `mister_pacer_restore_arm_clock()` are
+present but dormant. Gate on post-profile data before enabling. See
+Phase 6 plan D7 (ARM clock override, ceiling 1200 MHz, atexit-restore
+required).
+
 ## Phase 0 post-conditions (what Phase 1 inherits)
 
 1. Working `tools/mister/setup-build-container.sh` + `build-game.sh`
