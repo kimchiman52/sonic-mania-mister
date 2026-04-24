@@ -97,17 +97,31 @@ AND BUF0/BUF1 zeroed, the writer mmap'd, memset, and wrote frames.
   channels/samples/format/driver after successful open. Gated on
   `#if defined(ENABLE_PERF_TELEMETRY) && ENABLE_PERF_TELEMETRY`.
 
-### Phase 4 — FPGA core (RBF complete, deploy pending)
+### Phase 4 — FPGA core (RBF built + deployed, user boot pending)
 
 - `Sonic Mania.rbf` built successfully in colima VM Quartus. 72 min
   wall clock, 0 errors, 78 (expected) warnings.
 - Modeline: 320×240 @ 59.587 Hz, pixel clock 6.151 MHz (PLL
-  integer-N M=62/N=3/C=42, verified by fitter log).
-- Wrapper HPS binary `MiSTer_SonicMania` built (armhf, ~1 MB).
-- Deploy procedure: `tools/mister-wrapper/deploy-step5.sh` SCPs RBF +
-  wrapper + test-frame-writer to `/media/fat/_Other/` and
-  `/media/fat/games/SonicMania/`, then injects the `[Sonic Mania]` section
-  with `vga_scaler=0` into `MiSTer.ini`.
+  integer-N M=62/N=3/C=42, verified by fitter log showing period 40.645 ns).
+- Wrapper HPS binary `MiSTer_SonicMania` built (armhf, 1,030,916 B).
+- Deployed to MiSTer via `tools/mister-wrapper/deploy-step5.sh`:
+  - `/media/fat/MiSTer_SonicMania` (wrapper)
+  - `/media/fat/_Other/Sonic Mania.rbf` (core)
+  - `/media/fat/games/sonic-mania/test-frame-writer` (320×240 RGB565 DDR3 pattern writer)
+  - `MiSTer.ini` `[Sonic Mania]` section added with `vga_scaler=0`
+
+**Next (requires user hands on hardware):**
+1. Boot "Sonic Mania" from MiSTer `_Other/` menu.
+2. SSH in and run `/media/fat/games/sonic-mania/test-frame-writer bars &` to
+   verify HDMI output shows a 320×240 color-bar pattern. Confirms
+   Phase 4's FPGA pixel reader + VTG + PLL chain is alive.
+3. If CRT is hooked up via S-Video, confirm color (not grayscale) — that
+   verifies the `core_CLK_VIDEO = 1550.0/63.0` fix in `video.cpp` matches
+   the actual PLL rate and the YC subcarrier phase is correct.
+4. Copy legally-owned `Data.rsdk` to `/media/fat/games/sonic-mania/` and
+   launch the binary — full gameplay test.
+5. Once first-light confirmed, run the non-`--fast` Quartus build for
+   release (2+ hours, per `feedback-quartus-fast-build.md`).
 
 ### Backend selection chain (Phase 1)
 
