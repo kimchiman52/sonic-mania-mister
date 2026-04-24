@@ -14,7 +14,7 @@ See `docs/mister-runbook.md` for the full end-to-end procedure.
 | Script | Purpose |
 |---|---|
 | `setup-build-container.sh` | Create / reuse the Debian 11 + clang-20 Docker container with armhf cross packages. Idempotent. |
-| `build-game.sh`            | Cross-compile `RSDKv5U` inside the container. Flavor flag `--flavor telemetry|clean|both`. |
+| `build-game.sh`            | Cross-compile `RSDKv5U` inside the container. Flavor flag `--flavor telemetry\|clean\|both`. |
 | `package.sh`               | Internal. Takes a cmake install prefix and stages a MiSTer-ready directory with launcher. Called by `build-game.sh`. |
 | `deploy-to-mister.sh`      | SCP packaged binary to MiSTer. Reads `MISTER_HOST`, `MISTER_PASSWORD`. Whitelist-guarded path. |
 

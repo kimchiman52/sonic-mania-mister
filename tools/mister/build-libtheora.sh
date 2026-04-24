@@ -63,7 +63,18 @@ echo "---"
 echo "built cairo-free libtheora at /work-theora-install/lib/"
 ls -la /work-theora-install/lib/libtheora.so.0.* /work-theora-install/lib/libtheoradec.so.1.*
 echo "---"
-echo "NEEDED on libtheora.so.0:"
-arm-linux-gnueabihf-readelf -d /work-theora-install/lib/libtheora.so.0.3.10 | grep NEEDED
-echo "NEEDED on libtheoradec.so.1:"
-arm-linux-gnueabihf-readelf -d /work-theora-install/lib/libtheoradec.so.1.1.4 | grep NEEDED
+# Version-agnostic readelf probes: use a glob so a future xiph micro-bump
+# (e.g. 1.1.2 shipping libtheoradec.so.1.1.5) doesn't break the script.
+# Resolve each SONAME glob to a concrete file; bail loudly if the build
+# produced nothing to probe.
+theora_real="$(ls /work-theora-install/lib/libtheora.so.0.*.* 2>/dev/null | head -n 1 || true)"
+theoradec_real="$(ls /work-theora-install/lib/libtheoradec.so.1.*.* 2>/dev/null | head -n 1 || true)"
+if [ -z "${theora_real}" ] || [ -z "${theoradec_real}" ]; then
+    echo "error: expected libtheora.so.0.* and libtheoradec.so.1.* under /work-theora-install/lib/" >&2
+    ls -la /work-theora-install/lib/ >&2 || true
+    exit 1
+fi
+echo "NEEDED on libtheora.so.0 (${theora_real##*/}):"
+arm-linux-gnueabihf-readelf -d "${theora_real}" | grep NEEDED
+echo "NEEDED on libtheoradec.so.1 (${theoradec_real##*/}):"
+arm-linux-gnueabihf-readelf -d "${theoradec_real}" | grep NEEDED

@@ -5,6 +5,26 @@
 # Deliberately slim compared to the sibling 3sx-mister/tools/mister/package.sh
 # (no license bundle, no OSD launcher, no SDL lib rehoming). Phase 7 polish
 # picks up the heavier bits once we know which SONAMEs MiSTer ships.
+#
+# ===============================================================
+# DEVIATION from docs/phase-0-plan.md Step 4
+# ===============================================================
+# The plan explicitly said "Do NOT create ${output_dir}/lib/ in Phase 0".
+# That guidance predates the discovery (during M2 bring-up) that MiSTer's
+# stock rootfs ships neither libtheora.so.0 nor libtheoradec.so.1. Without
+# those SONAMEs, the binary cannot `dlopen` at startup and the Phase 0
+# smoke test fails before reaching the Data.rsdk read path that the exit
+# criterion targets.
+#
+# The deviation is: package.sh creates `${output_dir}/lib/` and bundles
+# cairo-free libtheora/libtheoradec built by tools/mister/build-libtheora.sh.
+# run-mania.sh prepends that dir to LD_LIBRARY_PATH. This is the minimum
+# bundling required for the Phase 0 binary to load at all.
+#
+# Everything else the plan called out (SDL2 rehoming, license bundles,
+# OSD launcher wrappers) is still deferred to Phase 7. See the same-named
+# "Bundling deviation" subsection in docs/mister-runbook.md.
+# ===============================================================
 
 set -euo pipefail
 

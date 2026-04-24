@@ -20,11 +20,22 @@ option(PORT_MISTER "Enable MiSTer-oriented build profile" OFF)
 option(ENABLE_PERF_TELEMETRY "Enable perf telemetry capture (no-op in Phase 0)" ON)
 
 if(PORT_MISTER)
-    # M5 sidestep: upstream CMakeLists.txt line 16 defaults GAME_STATIC via a
-    # broken generator-expression that doesn't expand correctly when
-    # PORT_MISTER is ON. Force GAME_STATIC=ON into the cache BEFORE the
-    # `add_subdirectory(${RSDK_PATH})` call below so the engine submodule
-    # picks up our value rather than the broken default.
+    # M5 sidestep: the `option(GAME_STATIC ...)` call below (line ~48 in
+    # this file, inherited from upstream) uses a nested generator expression
+    # as its default value:
+    #     option(GAME_STATIC "..." $<BOOL:$<IF:WITH_RSDK,ON,OFF>>)
+    # Generator expressions are not evaluated during `option()` processing —
+    # they only expand at generate time inside target properties. So that
+    # default is effectively the literal unevaluated string, which CMake
+    # coerces to a boolean of unpredictable truthiness depending on the
+    # cmake version and prior cache state. The genex is upstream's bug, not
+    # ours; we deliberately do NOT patch the upstream line (keeps future
+    # submodule merges clean). Instead we force GAME_STATIC=ON into the
+    # cache BEFORE `add_subdirectory(${RSDK_PATH})` runs, so the engine
+    # submodule picks up our value rather than the broken default.
+    # TODO(phase-7): file this upstream against RSDKv5-Decompilation and,
+    # once they either remove the genex or swap it for a plain ON/OFF, drop
+    # this FORCE override and the sibling forces below.
     set(GAME_STATIC ON CACHE STRING "force-static for MiSTer" FORCE)
     set(RETRO_SUBSYSTEM "SDL2" CACHE STRING "MiSTer: force SDL2 subsystem" FORCE)
     set(USE_SDL_AUDIO ON CACHE BOOL "MiSTer: force SDL audio" FORCE)

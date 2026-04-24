@@ -176,6 +176,18 @@ build_one() {
 
     local extra_args=()
     if [ -n "${extra_cmake_args}" ]; then
+        # read -ra word-splits on whitespace only — embedded quotes are NOT
+        # honored and will be forwarded literally to cmake, which almost
+        # always silently mangles the value. Warn loudly rather than pretend
+        # to support quoted whitespace values. (See P-2.2 in phase-0 review.)
+        if [[ "${extra_cmake_args}" == *'"'* ]] || [[ "${extra_cmake_args}" == *\'* ]]; then
+            echo "warning: EXTRA_CMAKE_ARGS contains a quote character; values with" >&2
+            echo "         embedded whitespace or shell quoting are NOT preserved by" >&2
+            echo "         this script (see --help). Quotes are forwarded verbatim to" >&2
+            echo "         cmake and will almost certainly break the -D parse. Pass" >&2
+            echo "         each -Dkey=value as a separate whitespace-delimited token." >&2
+            echo "         Continuing anyway — inspect the cmake invocation below." >&2
+        fi
         read -ra extra_args <<< "${extra_cmake_args}"
     fi
 

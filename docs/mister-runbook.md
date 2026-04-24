@@ -88,6 +88,47 @@ compiles cleanly against 2.0.14 and falls back to `SDL_RenderCopy`. No
 patch required. If upstream adds more 2.0.18+ APIs without a guard,
 flag that as a Phase 7 polish.
 
+**Pre-flight coverage check (run from repo root):**
+
+```bash
+# How many unique SDL_* symbol references exist in the engine?
+grep -rhoE "SDL_[A-Z][a-zA-Z_]+" dependencies/RSDKv5/RSDKv5/RSDK/ | sort -u | wc -l
+# 2026-04-24 on dependencies/RSDKv5 @ 2203458: 202
+
+# Where are the post-2.0.14 APIs used? Each hit must be #if-guarded.
+grep -rn "SDL_RenderGeometry\|SDL_RenderGeometryRaw" \
+    dependencies/RSDKv5/RSDKv5/RSDK/
+# All 11 hits live in SDL2RenderDevice.cpp inside the
+# #if (SDL_COMPILEDVERSION >= SDL_VERSIONNUM(2, 0, 18)) block (line 114
+# through line 196). The #else branch falls back to SDL_RenderCopy.
+```
+
+Findings as of 2026-04-24: 202 unique SDL symbols referenced.
+`SDL_RenderGeometryRaw` (2.0.18+) is the only post-2.0.14 API; all 11
+call sites are behind the version guard. `SDL_OpenURL` (2.0.14) appears
+once in `User/Dummy/DummyCore.cpp:116` but is exactly our floor.
+`SDL_RenderSetLogicalSize` and similar are ancient. Nothing else
+requires patching.
+
+Re-run the two greps whenever the RSDKv5 submodule bumps; a new
+unguarded 2.0.16+/2.0.18+ hit is a Phase 7 follow-up.
+
+### Bundling deviation from `phase-0-plan.md`
+
+The plan Step 4 said **do not create `${output_dir}/lib/` in Phase 0**.
+Implementation deviates: `tools/mister/package.sh` does stage
+`${output_dir}/lib/` and bundles cairo-free libtheora + libtheoradec
+there. Reason: MiSTer's stock rootfs ships neither SONAME, so the
+binary cannot load without them and the Phase 0 smoke test fails before
+reaching the Data.rsdk path that the exit criterion actually targets.
+
+Scope of the deviation is limited to those two libraries and the
+corresponding `LD_LIBRARY_PATH` prepend in `run-mania.sh`. Everything
+else the plan deferred (SDL2 rehoming, license bundles, OSD launcher
+wrappers, full dep-graph bundling) stays deferred until Phase 7. See
+the explanatory block at the top of `tools/mister/package.sh` for
+the parallel comment that lives with the code.
+
 ## Manual Docker bootstrap (for debugging)
 
 ```bash
@@ -244,6 +285,40 @@ A passing `/tmp/mania-smoke.log` shows either:
 deploy script intentionally does not touch `Data.rsdk`.
 
 ## Troubleshooting
+
+### libtheora bootstrap failed (half-configured container)
+
+`setup-build-container.sh` runs `build-libtheora.sh` inline as its last
+step. If that step aborts (xiph tarball mirror was down, a transient
+network failure, missing `autoconf`, etc.), the container ends up with
+cross packages installed but no `/work-theora-install/` tree; `package.sh`
+then falls back to Debian's cairo-linked libtheora and the resulting
+binary cannot run on MiSTer.
+
+Manual recovery (does not require re-bootstrapping the container from
+scratch):
+
+```bash
+# Re-runs the whole upstream xiph fetch + cross-build. --force wipes
+# any partial state under /tmp/theora-* inside the container.
+docker exec sonic-mania-mister-arm-build \
+    bash /src/tools/mister/build-libtheora.sh --force
+
+# Confirm the cairo-free libs now exist:
+docker exec sonic-mania-mister-arm-build \
+    ls -la /work-theora-install/lib/
+```
+
+If the failure was transient, the rerun usually succeeds. If the xiph
+tarball URL itself is unreachable, mirror the tarball manually into
+`/work-theora-src/libtheora-1.1.1.tar.bz2` inside the container (the
+script reuses a cached tarball if it finds one), or edit the
+`THEORA_TARBALL_URL` at the top of `build-libtheora.sh` to point at
+a mirror.
+
+Once `/work-theora-install/` is populated, rerun `bash
+tools/mister/build-game.sh --flavor telemetry`; `package.sh` will
+prefer the cairo-free copies automatically.
 
 ### Build errors
 
