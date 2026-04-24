@@ -1,4 +1,4 @@
-# MiSTer Runbook (Sonic Mania — Phases 0 + 1 + 2 + 3)
+# MiSTer Runbook (Sonic Mania — Phases 0 + 1 + 2 + 3 + 6 scaffold)
 
 ## Scope
 
