@@ -1,0 +1,17 @@
+# Sonic Mania MiSTer wrapper: menu.cpp patch
+#
+# This is intentionally a no-op patch for Phase 4. The upstream `Main_MiSTer`
+# `menu.cpp` is used unchanged. The wrapper entry happens through our renamed
+# `sonicmania_main.cpp`, which replaces upstream `main.cpp` (excluded by
+# Makefile.full.sonic-mania via `$(filter-out main.cpp, ...)`). That's the
+# only wiring needed: `main()` calls `sonicmania_wrapper_run()`.
+#
+# The 3sx-mister `main-mister-full-menu.patch` injected direct-P2P netplay OSD
+# submenu items into `menu.cpp`. Sonic Mania defers wrapper-driven netplay
+# OSD to Phase 7 (per docs/phase-4-plan.md §6.5 -- "Input SHM (deferred)").
+# When that future phase re-enables SHM / wrapper OSD, a fresh patch will be
+# added here.
+#
+# `git apply --whitespace=nowarn` accepts this file as a zero-hunk patch and
+# completes successfully, so `tools/mister-wrapper/build-hps.sh` does not need
+# to special-case an absent patch.

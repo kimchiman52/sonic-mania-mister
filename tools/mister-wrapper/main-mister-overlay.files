@@ -1,0 +1,14 @@
+fpga_io.cpp
+fpga_io.h
+input.cpp
+input.h
+mister_joy_shm.h
+sonicmania_core_context.cpp
+sonicmania_core_context.h
+sonicmania_main.cpp
+sonicmania_wrapper.cpp
+sonicmania_wrapper.h
+user_io.cpp
+user_io.h
+video.cpp
+video.h
