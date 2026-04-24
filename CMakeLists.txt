@@ -3,6 +3,38 @@ project(SonicMania)
 
 option(WITH_RSDK "Whether or not to build with RSDKv5. Defaults to true" ON)
 
+# ------------------------------------------------------------------
+# MiSTer port profile (Phase 0 — cross-compile plumbing).
+#
+# PORT_MISTER gates a profile that forces SDL2 subsystem, SDL audio,
+# disables Plus/DLC content, and forces static-linking of the game so the
+# engine ships as a single RSDKv5U executable. The profile is inert on
+# non-MiSTer builds (everything else falls through to upstream defaults).
+#
+# ENABLE_PERF_TELEMETRY is declared at top-level (NOT inside PORT_MISTER)
+# so `cmake -DENABLE_PERF_TELEMETRY=OFF` is always respected at configure
+# time regardless of PORT_MISTER. In Phase 0 the define is a no-op; real
+# perf-gating arrives in Phase 6.
+# ------------------------------------------------------------------
+option(PORT_MISTER "Enable MiSTer-oriented build profile" OFF)
+option(ENABLE_PERF_TELEMETRY "Enable perf telemetry capture (no-op in Phase 0)" ON)
+
+if(PORT_MISTER)
+    # M5 sidestep: upstream CMakeLists.txt line 16 defaults GAME_STATIC via a
+    # broken generator-expression that doesn't expand correctly when
+    # PORT_MISTER is ON. Force GAME_STATIC=ON into the cache BEFORE the
+    # `add_subdirectory(${RSDK_PATH})` call below so the engine submodule
+    # picks up our value rather than the broken default.
+    set(GAME_STATIC ON CACHE STRING "force-static for MiSTer" FORCE)
+    set(RETRO_SUBSYSTEM "SDL2" CACHE STRING "MiSTer: force SDL2 subsystem" FORCE)
+    set(USE_SDL_AUDIO ON CACHE BOOL "MiSTer: force SDL audio" FORCE)
+    set(RETRO_DISABLE_PLUS ON CACHE BOOL "MiSTer: disable Plus/DLC content gating" FORCE)
+    set(PLATFORM "MiSTer" CACHE STRING "MiSTer: platform dispatch" FORCE)
+endif()
+
+message(STATUS "PORT_MISTER=${PORT_MISTER}")
+message(STATUS "ENABLE_PERF_TELEMETRY=${ENABLE_PERF_TELEMETRY}")
+
 if(NOT DEFINED GAME_STATIC)
     if(WIN32)
         set(GAME_STATIC OFF)
