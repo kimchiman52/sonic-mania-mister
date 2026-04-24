@@ -1,9 +1,9 @@
-# MiSTer Runbook (Sonic Mania — Phases 0 + 1 + 2)
+# MiSTer Runbook (Sonic Mania — Phases 0 + 1 + 2 + 3)
 
 ## Scope
 
 This runbook targets stock MiSTer Linux (Cyclone V HPS, Cortex-A9 armhf,
-glibc 2.31) with the current Sonic Mania build profile through **Phase 2**:
+glibc 2.31) with the current Sonic Mania build profile through **Phase 3**:
 
 - Cross-compiled inside Debian 11 + clang-20 Docker container.
 - `RETRO_SUBSYSTEM=MiSTer` under `PORT_MISTER=ON` — selects the MiSTer
@@ -68,6 +68,46 @@ ssh root@192.168.1.188 'busybox devmem 0x3A000000; busybox devmem 0x3A000100; bu
 
 If ctrl advanced (e.g. to `0x00000009` = frame_counter=2, active_buf=1)
 AND BUF0/BUF1 zeroed, the writer mmap'd, memset, and wrote frames.
+
+### Phase 3 — Audio + input (live)
+
+- `MiSTerRenderDevice::Init()` now calls `(void)AudioDevice::Init();` and
+  `InitInputDevices();` after the existing Phase 2 Init chain (pixWidth →
+  SetupRendering → NativeVideoWriter_Init). The `(void)` cast is
+  intentional: `SDL2AudioDevice::Init()` always returns `true` even when
+  `SDL_OpenAudioDevice` fails — the `if (!...)` branch would be dead code.
+- `ProcessEvent` / `ProcessEvents` are a lift-and-shift from
+  `SDL2RenderDevice` (~320 LOC), with the `SDL_WINDOWEVENT` case
+  (`SDL2RenderDevice.cpp:697-721`) and the Alt+Enter fullscreen toggle
+  (`:819-825`) fully stripped. These don't apply when there's no SDL
+  window.
+- `MiSTerRenderDevice.hpp` now includes `<SDL2/SDL.h>` — the Phase 1
+  "SDL-type-free" comment is updated. The `.cpp` body still has zero
+  `#include` lines (guardrail preserved).
+- **Upstream bug fix:** `KBInputDevice.cpp` previously gated
+  `SDLToWinAPIMappings` on `RETRO_RENDERDEVICE_SDL2`; should have been
+  `RETRO_INPUTDEVICE_SDL2`. Without this fix, MiSTer (render=MiSTer,
+  input=SDL2) would bypass the scancode remap and fail keyboard bindings.
+  Three places widened: function-definition guard at `:13`, and two
+  call-site guards at `:822` and `:856`.
+- **Release double-call avoidance:** `RenderDevice::Release()` must NOT
+  call `AudioDevice::Release()` or `ReleaseInputDevices()`.
+  `RetroEngine.cpp:326-328` already does this at engine shutdown.
+- Telemetry log line in `SDL2AudioDevice::Init` reports device/freq/
+  channels/samples/format/driver after successful open. Gated on
+  `#if defined(ENABLE_PERF_TELEMETRY) && ENABLE_PERF_TELEMETRY`.
+
+### Phase 4 — FPGA core (RBF complete, deploy pending)
+
+- `Sonic Mania.rbf` built successfully in colima VM Quartus. 72 min
+  wall clock, 0 errors, 78 (expected) warnings.
+- Modeline: 320×240 @ 59.587 Hz, pixel clock 6.151 MHz (PLL
+  integer-N M=62/N=3/C=42, verified by fitter log).
+- Wrapper HPS binary `MiSTer_SonicMania` built (armhf, ~1 MB).
+- Deploy procedure: `tools/mister-wrapper/deploy-step5.sh` SCPs RBF +
+  wrapper + test-frame-writer to `/media/fat/_Other/` and
+  `/media/fat/games/SonicMania/`, then injects the `[Sonic Mania]` section
+  with `vga_scaler=0` into `MiSTer.ini`.
 
 ### Backend selection chain (Phase 1)
 
