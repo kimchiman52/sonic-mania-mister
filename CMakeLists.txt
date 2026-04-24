@@ -37,7 +37,11 @@ if(PORT_MISTER)
     # once they either remove the genex or swap it for a plain ON/OFF, drop
     # this FORCE override and the sibling forces below.
     set(GAME_STATIC ON CACHE STRING "force-static for MiSTer" FORCE)
-    set(RETRO_SUBSYSTEM "SDL2" CACHE STRING "MiSTer: force SDL2 subsystem" FORCE)
+    # Phase 1: select the MiSTer native render backend (RETRO_SUBSYSTEM=MiSTer
+    # -> RSDK_USE_MISTER=1 via dependencies/RSDKv5/CMakeLists.txt:155 ->
+    # RETRO_RENDERDEVICE_MISTER=1 in RetroEngine.hpp). The subsystem string is
+    # also re-FORCEd inside platforms/MiSTer.cmake as belt-and-braces.
+    set(RETRO_SUBSYSTEM "MiSTer" CACHE STRING "MiSTer: native render backend" FORCE)
     set(USE_SDL_AUDIO ON CACHE BOOL "MiSTer: force SDL audio" FORCE)
     set(RETRO_DISABLE_PLUS ON CACHE BOOL "MiSTer: disable Plus/DLC content gating" FORCE)
     set(PLATFORM "MiSTer" CACHE STRING "MiSTer: platform dispatch" FORCE)
