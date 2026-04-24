@@ -1,28 +1,73 @@
-# MiSTer Runbook (Sonic Mania — Phases 0 + 1)
+# MiSTer Runbook (Sonic Mania — Phases 0 + 1 + 2)
 
 ## Scope
 
 This runbook targets stock MiSTer Linux (Cyclone V HPS, Cortex-A9 armhf,
-glibc 2.31) with the current Sonic Mania build profile through **Phase 1**:
+glibc 2.31) with the current Sonic Mania build profile through **Phase 2**:
 
 - Cross-compiled inside Debian 11 + clang-20 Docker container.
 - `RETRO_SUBSYSTEM=MiSTer` under `PORT_MISTER=ON` — selects the MiSTer
-  render-device backend (Phase 1). Stubs-only today: every `RenderDevice`
-  method logs its name via `PrintLog` and returns success. Real DDR3 pixel
-  writing arrives in Phase 2.
+  render-device backend (Phase 1). Stubs-only for most methods; Phase 2
+  wires in the real DDR3 path (see below).
 - `USE_SDL_AUDIO=ON` + `RETRO_DISABLE_PLUS=ON`.
 - Single static binary (`GAME_STATIC=ON`); engine and game ship together as
   `RSDKv5U`.
 - Launcher sets `SDL_VIDEODRIVER=dummy` so SDL2 input/audio initializes
   without trying to open a window. Video output does NOT go through SDL on
-  MiSTer — it goes through the MiSTer backend (currently stubbed).
+  MiSTer — it goes through the MiSTer backend writing directly to DDR3 for
+  the FPGA pixel reader to scan out.
 
-Current **exit criterion**: the deployed binary starts on MiSTer, logs the
-stubbed `MiSTerRenderDevice::*` method calls, attempts to open
-`Data.rsdk`, and exits cleanly within 10 seconds whether or not the data
-file is present. On a Mac dev build, inspect the log at
-`~/Library/Application Support/RSDKv5/log.txt` to confirm the backend
-selection chain is wired end-to-end.
+### Phase 2 — NativeVideoWriter (live)
+
+- `dependencies/RSDKv5/RSDKv5/RSDK/Graphics/MiSTer/NativeVideoWriter.{h,c}`
+  is a port of 3sx's writer, reparameterized for Mania's 320×240 RGB565
+  layout.
+- `videoSettings.pixWidth = 320;` is the first statement of
+  `MiSTerRenderDevice::Init()`; engine default `424` would mismatch Phase 4
+  RTL.
+- `FlipScreen()` calls `NativeVideoWriter_WriteFrame(screens[0].frameBuffer,
+  320, 240, screens[0].pitch * sizeof(uint16))`. Note: RSDK's
+  `ScreenInfo::pitch` is in uint16 pixels, hence the `* sizeof(uint16)`
+  byte-conversion. The writer's parameter is therefore named `pitch_bytes`
+  to avoid the footgun.
+- DDR3 memory map (must match Phase 4 RTL):
+  - `NV_DDR_PHYS_BASE = 0x3A000000`, `REGION_SIZE = 0x60000`
+  - `CTRL @ 0x0`, `FEEDBACK @ 0x40`
+  - `BUF0 @ 0x100` (153,600 B), `BUF1 @ 0x25900` (153,600 B)
+  - Control word encoding: `[1:0]=active_buf`, `[31:2]=frame_counter`
+- The `.c` file is dual-guarded by `#if defined(__linux__) &&
+  defined(PORT_MISTER)` — on Mac host, the writer compiles but `Init()`
+  returns `false`; engine logs and continues (no abort).
+- `#include "MiSTer/NativeVideoWriter.h"` lives in `Drawing.cpp` above the
+  textual `#include "MiSTer/MiSTerRenderDevice.cpp"`, not in
+  `MiSTerRenderDevice.cpp` — the Phase 1 "no includes here" guardrail is
+  preserved.
+
+Current **exit criterion**: the deployed binary on MiSTer opens `/dev/mem`,
+mmaps `0x3A000000`, writes frames into DDR3 with a monotonically advancing
+control-word counter, attempts to open `Data.rsdk`, and exits cleanly
+whether or not the data file is present. Verify via `busybox devmem
+0x3A000000` — the control word should be non-zero and should change
+between samples. On Mac, inspect
+`~/Library/Application Support/RSDKv5/log.txt` for the expected lines.
+
+### Canary test — does the writer actually run?
+
+Because Mania can't render real pixels without `Data.rsdk`, a canary
+test proves the writer pipeline works end-to-end:
+
+```bash
+ssh root@192.168.1.188 'busybox devmem 0x3A000000 32 0xDEADBEEF; \
+                        busybox devmem 0x3A000100 32 0xCAFEBABE; \
+                        busybox devmem 0x3A025900 32 0xFEEDFACE'
+# run the binary briefly
+ssh root@192.168.1.188 'cd /media/fat/games/SonicMania && timeout 5 ./RSDKv5U'
+ssh root@192.168.1.188 'busybox devmem 0x3A000000; busybox devmem 0x3A000100; busybox devmem 0x3A025900'
+# expected: ctrl non-zero+changed, BUF0 and BUF1 zeroed (by memset in Init)
+```
+
+If ctrl advanced (e.g. to `0x00000009` = frame_counter=2, active_buf=1)
+AND BUF0/BUF1 zeroed, the writer mmap'd, memset, and wrote frames.
 
 ### Backend selection chain (Phase 1)
 
