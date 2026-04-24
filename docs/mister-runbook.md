@@ -1,21 +1,42 @@
-# MiSTer Runbook (Sonic Mania — Phase 0)
+# MiSTer Runbook (Sonic Mania — Phases 0 + 1)
 
 ## Scope
 
 This runbook targets stock MiSTer Linux (Cyclone V HPS, Cortex-A9 armhf,
-glibc 2.31) with the **Phase 0** Sonic Mania build profile:
+glibc 2.31) with the current Sonic Mania build profile through **Phase 1**:
 
 - Cross-compiled inside Debian 11 + clang-20 Docker container.
-- SDL2 subsystem + `USE_SDL_AUDIO=ON` + `RETRO_DISABLE_PLUS=ON`.
+- `RETRO_SUBSYSTEM=MiSTer` under `PORT_MISTER=ON` — selects the MiSTer
+  render-device backend (Phase 1). Stubs-only today: every `RenderDevice`
+  method logs its name via `PrintLog` and returns success. Real DDR3 pixel
+  writing arrives in Phase 2.
+- `USE_SDL_AUDIO=ON` + `RETRO_DISABLE_PLUS=ON`.
 - Single static binary (`GAME_STATIC=ON`); engine and game ship together as
   `RSDKv5U`.
-- No MiSTer render backend yet (Phase 1); launcher forces
-  `SDL_VIDEODRIVER=dummy` so the stock SDL2 backend can at least initialize.
+- Launcher sets `SDL_VIDEODRIVER=dummy` so SDL2 input/audio initializes
+  without trying to open a window. Video output does NOT go through SDL on
+  MiSTer — it goes through the MiSTer backend (currently stubbed).
 
-Phase 0 **exit criterion**: the deployed binary starts on MiSTer, attempts
-to open `Data.rsdk`, and exits cleanly within 10 seconds whether or not
-the data file is present. No rendering, no controller, no audio are
-required.
+Current **exit criterion**: the deployed binary starts on MiSTer, logs the
+stubbed `MiSTerRenderDevice::*` method calls, attempts to open
+`Data.rsdk`, and exits cleanly within 10 seconds whether or not the data
+file is present. On a Mac dev build, inspect the log at
+`~/Library/Application Support/RSDKv5/log.txt` to confirm the backend
+selection chain is wired end-to-end.
+
+### Backend selection chain (Phase 1)
+
+```
+-DPORT_MISTER=ON (root CMakeLists.txt)
+  → PLATFORM=MiSTer        (forces submodule to load platforms/MiSTer.cmake)
+  → RETRO_SUBSYSTEM=MiSTer (forces submodule to emit RSDK_USE_MiSTer=1)
+  → MiSTer.cmake also emits RSDK_USE_MISTER=1 (all-caps, for the RetroEngine.hpp arm)
+  → RetroEngine.hpp Linux/OSX arms: #if defined(RSDK_USE_MISTER) → RETRO_RENDERDEVICE_MISTER=1
+  → Drawing.hpp / Drawing.cpp: #elif RETRO_RENDERDEVICE_MISTER → include MiSTer/MiSTerRenderDevice.hpp
+```
+
+All upstream patches (`RetroEngine.hpp`, `Drawing.hpp`, `Drawing.cpp`) are
+`#if defined(RSDK_USE_MISTER)`-guarded — non-MiSTer builds see no change.
 
 ## Canonical Docker quick start
 
