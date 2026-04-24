@@ -61,8 +61,10 @@ else
     echo "   (not a deploy blocker; Step 2-3 Quartus build must run separately on colima quartus2 VM)"
 fi
 
-# Test frame writer -- place under /media/fat/games/sonic-mania/
-ssh_remote "mkdir -p /media/fat/games/sonic-mania/logs /media/fat/games/sonic-mania/bin /media/fat/games/sonic-mania/lib"
+# Test frame writer -- place under /media/fat/games/sonic-mania/.
+# Phase 7 Step 4: also pre-create saves/ and resources/ so the engine's
+# MiSTer InitUserDirectory() arm has a stable home for SGame.bin etc.
+ssh_remote "mkdir -p /media/fat/games/sonic-mania/logs /media/fat/games/sonic-mania/bin /media/fat/games/sonic-mania/lib /media/fat/games/sonic-mania/saves /media/fat/games/sonic-mania/resources"
 if [ -f "${TEST_FRAME_WRITER}" ]; then
     echo "-> copy test-frame-writer -> /media/fat/games/sonic-mania/test-frame-writer"
     scp_remote "${TEST_FRAME_WRITER}" "/media/fat/games/sonic-mania/test-frame-writer"

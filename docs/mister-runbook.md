@@ -123,6 +123,76 @@ AND BUF0/BUF1 zeroed, the writer mmap'd, memset, and wrote frames.
 5. Once first-light confirmed, run the non-`--fast` Quartus build for
    release (2+ hours, per `feedback-quartus-fast-build.md`).
 
+### Phase 7 — Polish + release (Steps 1–5 landed; Steps 6 done-upstream; 7 + 8 deferred)
+
+Phase 7 polish landed against the Phase 0–6 stack. Per `docs/phase-7-plan.md`:
+
+- **Step 1** (`.gitignore` housekeeping): `build-*/` glob added, repo-root engine
+  outputs (`/log.txt`, `/Settings.ini`, `/SGame.bin`, `/Replay_*.bin`,
+  `/gamecontrollerdb.txt`) ignored. Phase 7 release tree
+  `/build/mister-release/` ignored.
+- **Step 2** (user-facing wrapper doc): `docs/mister-wrapper.md` created
+  (~210 lines). Covers install layout, `[Sonic Mania]` MiSTer.ini contract,
+  CRT notes, launch flow, saves, input rebinding, troubleshooting,
+  upgrade-from-dev path.
+- **Step 3** (release packaging): `tools/mister/release-readme.txt` and
+  `tools/mister-wrapper/build-release.sh` produce a dated release tree at
+  `build/mister-release/sonic-mania-mister-<DATE>/` and matching ZIP
+  + SHA256 sidecar. Default flavor is `clean`; dev iteration with telemetry
+  binaries works via `RUNTIME_INSTALL_PREFIX=build/mister-telemetry-install`.
+  RBF is required and never auto-built (Quartus is upstream of this script).
+  No `Data.rsdk`, logs, or save data ever ship in the ZIP.
+- **Step 4** (save-path routing): MiSTer arm added to `InitUserDirectory()`
+  in `dependencies/RSDKv5/RSDKv5/RSDK/User/Core/UserStorage.cpp`. Engine
+  routes saves/replays/Settings.ini/log.txt/gamecontrollerdb.txt to
+  `./saves/` (relative to APP_DIR, which `run-mania.sh` cd's to before
+  exec). Launcher and `deploy-step5.sh` `mkdir -p saves resources logs`
+  to keep the path stable across release-extract corner cases. Mac SDL2
+  and Mac PORT_MISTER builds verified clean; armhf cross-build verified
+  clean (clean flavor, container `sonic-mania-mister-arm-build`).
+- **Step 5** (INI defaults + first-run onboarding): `docs/mister-settings.md`
+  enumerates every `Settings.ini` key the engine reads, flagging
+  effectively-no-op keys on MiSTer (`Video:windowed`, `Video:vsync`,
+  `Video:shaderSupport`, `Video:pixWidth` clamped to 320, etc.). Launcher
+  guards `Data.rsdk` missing — exits with a friendly stderr message and
+  `logs/first-run.log` breadcrumb instead of the engine's terse "Nope!".
+
+**Step 6** (controller rebind UI): **DONE-UPSTREAM**. Mania ships its own
+in-game rebinder at `SonicMania/Objects/Menu/UIKeyBinder.{c,h}` (495
+LOC) with `OptionsMenu.c:58–168` controls dispatch covering WIN, KB,
+PS4, XB1, NX, NX Grip, NX Joycon, NX Pro layouts. Rebound mappings
+persist to `Settings.ini` under `[Keyboard Map N]` / `[GamePad Map N]`
+sections in `saves/`. Zero LOC needed; documentation-only added in
+`docs/mister-settings.md` "Input Rebinding" section. SDL2-level override
+hatch (`gamecontrollerdb.txt` in `saves/`) also documented.
+
+**Step 7** (YUV + ImageTexture unstub): **DEFERRED**. Cutscenes are
+attract-mode + inter-zone only and land black with audio currently. The
+~120-LOC CPU YUV→RGB565 + RGBA→RGB565 implementation is straightforward
+in isolation but is gated on a live cutscene playback test on real
+hardware (color calibration, frame-rate budget, BT.601 vs. BT.709
+debugging). Per phase-7-plan.md decision D5, deferring until Phase 0–6
+gameplay smoke + Phase 6 perf measurement clear. Stubs at
+`MiSTerRenderDevice.cpp:167–215` retain their explanatory comment block
+intact for the future revisit.
+
+**Step 8** (wrapper SHM input via `SONIC_MANIA_JOY_SHM`): **DEFERRED to
+Phase 4 territory**. The hook point already exists at
+`vendor/Main_MiSTer/sonicmania_wrapper.cpp:2789` where the wrapper
+exports `setenv("SONIC_MANIA_JOY_SHM", MISTER_JOY_SHM_PATH, 1)` to the
+child. The Linux-side reader (mmap + synthetic SDL events at
+`MiSTerRenderDevice::ProcessEvents`) is well-scoped (~150 LOC), but
+touches `vendor/Main_MiSTer/` for the magic-number / path constants —
+Phase 4 territory per Phase 7 guard rails. OSD-while-running navigation
+is the only feature Step 8 unlocks; in-game controls are unaffected.
+
+**Phase 7 release contract.** `tools/mister-wrapper/build-release.sh`
+produces a date-stamped (NOT version-stamped per
+`project-release-naming.md`) release tree + ZIP + SHA256. The release
+tree is fully usable; the ZIP is upload-ready for the user's own GitHub
+release per `feedback-releases-are-ours.md`. Publishing remains a
+manual step — this script does NOT push, tag, or call `gh`.
+
 ### Backend selection chain (Phase 1)
 
 ```

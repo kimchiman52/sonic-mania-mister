@@ -123,6 +123,26 @@ export LD_LIBRARY_PATH="${APP_DIR}/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 # Run from the binary's directory so relative paths (like Data.rsdk lookup
 # and settings.ini writeback) resolve next to the executable.
 cd "${APP_DIR}"
+
+# Phase 7 Step 5 first-run guardrail: surface a friendly message if
+# Data.rsdk is missing rather than letting the engine emit a terse "Nope!"
+# and exit silently. Wrapper child-failure path (sonicmania_wrapper.cpp)
+# reads non-zero exit and routes back to the OSD with an error.
+if [ ! -f "${APP_DIR}/Data.rsdk" ]; then
+    mkdir -p "${APP_DIR}/logs"
+    {
+        echo "Sonic Mania: required file Data.rsdk not found."
+        echo "Please copy your legally-owned Data.rsdk to:"
+        echo "  ${APP_DIR}/Data.rsdk"
+    } | tee "${APP_DIR}/logs/first-run.log" >&2
+    exit 2
+fi
+
+# Phase 7 Step 4: ensure engine-managed dirs exist so the MiSTer save-path
+# arm in InitUserDirectory() finds ./saves/ regardless of release-extract
+# corner cases (some unzip implementations skip empty dirs).
+mkdir -p saves resources logs
+
 exec ./bin/RSDKv5U "$@"
 LAUNCHER
 
