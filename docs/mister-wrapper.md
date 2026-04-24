@@ -154,8 +154,10 @@ section header but no `vga_scaler` key, the wrapper will inherit the
 global value.
 
 **No sync at all on CRT.**
-Try the MiSTer scaler path as a fallback (HDMI scaler routed to VGA DAC,
-no native YC color). Add to the `[Sonic Mania]` section:
+If your CRT cannot sync to the native PLL — overriding the "no
+`video_mode=` override" rule above as a last resort — fall back to
+the MiSTer scaler path (HDMI scaler routed to VGA DAC, no native YC
+color). Add to the `[Sonic Mania]` section:
 
 ```ini
 vga_scaler=1

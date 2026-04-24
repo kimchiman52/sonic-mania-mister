@@ -37,10 +37,18 @@ INSTALLATION
      /media/fat/games/sonic-mania/scripts/     (launcher)
      /media/fat/games/sonic-mania/saves/       (engine save dir)
 
+   Your existing _Other/ cores are unaffected — the install only adds
+   one new file (Sonic Mania.rbf) alongside whatever is already there.
+
    ** FTP users: ** If transferring files via FileZilla or another
    FTP client, set the transfer type to Binary (not Auto or ASCII).
    The default mode corrupts extensionless binaries like
    MiSTer_SonicMania and RSDKv5U, causing the core to crash on launch.
+
+   The lib/ directory contains symlinks for compatibility (e.g.
+   libtheora.so.0 -> libtheora.so.0.3.10). If your FTP/SCP client
+   materializes symlinks as duplicate files, that's harmless but
+   wastes a few hundred KB of SD-card space.
 
 2. Place your Data.rsdk file here:
 

@@ -190,6 +190,16 @@ stage_release() {
         cp -a "${RUNTIME_PACKAGE}/lib/." "${STAGE_DIR}/games/sonic-mania/lib/"
     fi
 
+    # Both lib/ source paths are optional individually, but at least one
+    # must have produced libtheora.so.0 — the MiSTer rootfs lacks it and
+    # the engine will fail to dlopen at launch otherwise.
+    if [ ! -f "${STAGE_DIR}/games/sonic-mania/lib/libtheora.so.0" ]; then
+        echo "ERR: libtheora.so.0 missing from stage; aborting" >&2
+        echo "  (checked: ${RUNTIME_INSTALL_PREFIX}/lib and ${RUNTIME_PACKAGE}/lib)" >&2
+        echo "  (run: bash tools/mister/build-libtheora.sh)" >&2
+        exit 1
+    fi
+
     if [ -f "${RUNTIME_PACKAGE}/scripts/run-mania.sh" ]; then
         cp "${RUNTIME_PACKAGE}/scripts/run-mania.sh" "${STAGE_DIR}/games/sonic-mania/scripts/run-mania.sh"
         chmod +x "${STAGE_DIR}/games/sonic-mania/scripts/run-mania.sh"
@@ -210,6 +220,9 @@ Source paths on retail installs:
 Without `Data.rsdk` present the core will exit immediately back to the
 MiSTer menu and log "Data.rsdk not found" to the wrapper log at:
   /media/fat/games/sonic-mania/logs/osd-wrapper.log
+
+(See also `scripts/run-mania.sh` for the runtime-time onboarding path
+the launcher takes when this file is missing.)
 PLACEHOLDER
 
     # Top-level docs the user lands on after extraction

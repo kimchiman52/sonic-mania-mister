@@ -14,7 +14,7 @@ users to hand-edit the file. In-game menus expose every safely-editable
 key, and the list below is intended for power users debugging behaviour
 or migrating settings from a desktop install.
 
-## How to read the tables
+## How to Read the Tables
 
 | Column | Meaning |
 |---|---|
@@ -23,7 +23,7 @@ or migrating settings from a desktop install.
 | Editable on MiSTer? | `yes` (engine respects edits), `no` (engine ignores or clamps), `effectively-no` (engine reads but the FPGA pipeline overrides it) |
 | Description | What the key does |
 
-## [Game] section
+## [Game] Section
 
 | Key | Default | Editable on MiSTer? | Description |
 |---|---|---|---|
@@ -40,7 +40,7 @@ or migrating settings from a desktop install.
 | `Game:gameLogic` | `Game` | no | Reserved engine constant — do not edit |
 | `Game:username` | `""` | yes | Optional player name used by the engine for save-slot tagging |
 
-## [Video] section
+## [Video] Section
 
 Most `Video:*` keys are inherited from RSDKv5's desktop frontend and have
 no effect on MiSTer because the FPGA core owns scan-out timing. The
@@ -63,7 +63,7 @@ engine still reads them; we list them for completeness.
 | `Video:screenShader` | `0` (SHADER_NONE) | effectively-no | Same reason — no shader pipeline |
 | `Video:maxPixWidth` | `424` | no | Clamped same as `pixWidth` |
 
-## [Audio] section
+## [Audio] Section
 
 | Key | Default | Editable on MiSTer? | Description |
 |---|---|---|---|
@@ -71,7 +71,7 @@ engine still reads them; we list them for completeness.
 | `Audio:streamVolume` | `0.8` | yes | Music volume (0.0–1.0) |
 | `Audio:sfxVolume` | `1.0` | yes | Sound-effect volume (0.0–1.0) |
 
-## [Keyboard Map N] sections (N = 1..4)
+## [Keyboard Map N] Sections (N = 1..4)
 
 For each player N from 1 to 4, the engine reads twelve keyboard scancodes.
 SDL2's keyboard input on MiSTer requires the `SDLToWinAPIMappings` table
@@ -86,17 +86,19 @@ through `SDLToWinAPIMappings`):
 `…:start`, `…:select`.
 
 Default values come from `defaultKeyMaps[N]` in
-`dependencies/RSDKv5/RSDKv5/RSDK/Input/Input.cpp`. Use the in-game
-Options → Controls → KB rebinder rather than hand-editing.
+`dependencies/RSDKv5/RSDKv5/RSDK/Input/Input.cpp`. Player 1 — use the
+in-game Options → Controls → KB rebinder rather than hand-editing.
+Players 2–4: hand-edit the `[Keyboard Map N]` sections if needed; the
+in-game UI may not expose them on this build.
 
-## [GamePad Map N] sections
+## [GamePad Map N] Sections
 
 Up to N gamepads worth of binding overrides. Each entry has `name`,
 `type`, `vendorID`, `productID`, `mappingTypes`, and `offsets`. These
 are written by the engine when a controller is mapped via Options →
 Controls; do not hand-edit.
 
-## [Dev] section (telemetry builds only)
+## [Dev] Section (Telemetry Builds Only)
 
 Telemetry builds (`tools/mister/build-game.sh --flavor telemetry`) gate
 some development-only logging behind `Dev:*` keys. The clean-flavor
@@ -118,7 +120,7 @@ controller's profile is auto-detected; rebinds are written into
 `Settings.ini` under the appropriate `[Keyboard Map N]` or
 `[GamePad Map N]` section and persist across launches.
 
-### SDL2 controller mapping override
+### SDL2 Controller Mapping Override
 
 If your controller is not auto-recognised (common with arcade pads or
 generic USB devices), drop a custom `gamecontrollerdb.txt` file into:
@@ -129,7 +131,7 @@ generic USB devices), drop a custom `gamecontrollerdb.txt` file into:
 
 The engine loads this file at startup via
 `SDL_GameControllerAddMappingsFromFile`
-(`dependencies/RSDKv5/RSDKv5/RSDK/Input/SDL2/SDL2InputDevice.cpp:241`).
+(`dependencies/RSDKv5/RSDKv5/RSDK/Input/SDL2/SDL2InputDevice.cpp:242`).
 Mappings here apply at the SDL2 layer — the engine still treats the
 device as a normal controller afterwards, so you can rebind buttons
 in-game on top of the SDL mapping.
@@ -137,7 +139,7 @@ in-game on top of the SDL mapping.
 The community-maintained source for current `gamecontrollerdb.txt`
 content is https://github.com/gabomdq/SDL_GameControllerDB.
 
-## Known differences from desktop builds
+## Known Differences from Desktop Builds
 
 The MiSTer port differs from upstream RSDKv5 desktop builds in a few
 hard-baked ways:
@@ -158,7 +160,7 @@ hard-baked ways:
 - **OSD overlay is unreachable while running.** The MiSTer OSD (F12)
   cannot be opened mid-game. Exit the core to access OSD options.
 
-## Settings.ini location migration (dev builds only)
+## Settings.ini Location Migration (Dev Builds Only)
 
 If you previously ran a development build that wrote `Settings.ini`
 directly into `/media/fat/games/sonic-mania/`, the file location moved
