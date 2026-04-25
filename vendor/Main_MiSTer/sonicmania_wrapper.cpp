@@ -222,7 +222,15 @@ bool runtime_tty2_requested()
 
 bool matches_core_name(const char *name)
 {
-	return name && name[0] && !strcasecmp(name, kCoreName);
+	// Phase 10: prefix-match instead of exact-match so the wrapper accepts
+	// both "Sonic Mania" (4:3 RBF CONF_STR) and "Sonic Mania (16:9)" (16:9
+	// RBF CONF_STR). Both share the same "Sonic Mania" prefix; the trailing
+	// aspect tag is discriminated separately via detect_aspect_from_rbf().
+	if (!name || !name[0]) return false;
+	const size_t n = strlen(kCoreName);
+	if (strncasecmp(name, kCoreName, n) != 0) return false;
+	// Accept either exact match or "Sonic Mania" followed by space/(.
+	return name[n] == '\0' || name[n] == ' ' || name[n] == '(';
 }
 
 int get_active_vt()
@@ -2685,6 +2693,21 @@ int sonicmania_wrapper_run(int argc, char *argv[])
 	fflush(stdout);
 	fflush(stderr);
 	if (wrapper_log) fseek(wrapper_log, 0, SEEK_END);
+
+	// Phase 10: when launched via MiSTer.ini's `main=MiSTer_SonicMania`
+	// directive (the path the user actually takes), the firmware does NOT
+	// pass an RBF path in argv. In that case detect_aspect_from_rbf above
+	// returned the default (4:3). Re-derive aspect from the core name after
+	// user_io_init has populated it. CONF_STR header is "Sonic Mania" for
+	// 4:3 and "Sonic Mania (16:9)" for widescreen — substring match the
+	// "(16:9)" tag.
+	{
+		const char *core_name = user_io_get_core_name();
+		if (core_name && strstr(core_name, "(16:9)"))
+		{
+			g_wrapper_aspect_ratio = kAspectRatioFull;
+		}
+	}
 
 	int active_vt = get_active_vt();
 	char cwd_buffer[512] = {};
