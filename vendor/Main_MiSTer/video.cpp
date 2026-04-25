@@ -32,6 +32,12 @@
 #include "lib/imlib2/Imlib2.h"
 #include "lib/md5/md5.h"
 
+// Phase 10: aspect-ratio dispatch global from sonicmania_wrapper.cpp
+// (defined there with `extern "C"` so the linker can resolve from this TU).
+// Used in set_yc_mode() to pick the correct PLL frequency for the YC
+// subcarrier baseline. 0 = 4:3 (27.0 MHz), 1 = widescreen (1010/29 MHz).
+extern "C" int g_wrapper_aspect_ratio;
+
 #define FB_SIZE  (1920*1080)
 #define FB_ADDR  (0x20000000 + (32*1024*1024)) // 512mb + 32mb(Core's fb)
 
@@ -3073,13 +3079,19 @@ static void set_yc_mode()
 		   phase is off and S-Video is grayscale or mis-tinted.
 		   See docs/phase-4-plan.md §6.8 (history) and
 		   docs/phase-9-scopecut-report.md (NTSC-exact retune). */
-		// Phase 9 scope cut: 4:3 only at 27.000 MHz (M=81/N=5/C=30 exact).
-		// Was 24.6032 MHz (M=62/N=3/C=42) in Phase 4; retuned to NTSC-exact
-		// 15,734 Hz H-freq. 16:9 widescreen deferred to Phase 10
-		// (altpll_reconfig — Cyclone V hdmi_clk_sw rejects cascaded clock
-		// muxes, so static dual-PLL path is architecturally impossible).
+		// Phase 10 dual-RBF: PLL frequency depends on which aspect-ratio core
+		// was loaded. The wrapper detects the aspect from the RBF filename in
+		// detect_aspect_from_rbf() and stores the result in
+		// g_wrapper_aspect_ratio (0 = 4:3 / 1 = full/widescreen).
+		//   4:3:        M=81 / N=5 / C=30 -> 27.000 MHz CLK_VIDEO
+		//   widescreen: M=101/ N=5 / C=29 -> 34.8276 MHz (1010/29) CLK_VIDEO
+		// Each PLL is statically configured in its respective RBF; the wrapper
+		// just needs the right scalar here so YC PHASE_INC and COLORBURST math
+		// land on the correct subcarrier phase. Mismatch -> grayscale S-Video.
 		const double core_CLK_VIDEO = native_video_enabled
-			? 27.0  // NTSC-exact 4:3 modeline
+			? (g_wrapper_aspect_ratio == 1 /* widescreen */
+				? (1010.0 / 29.0)  // 34.8276 MHz exact (16:9 RBF)
+				: 27.0)             // 4:3 RBF
 			: (current_video_info.ctime * 100.f / current_video_info.ptime);
 		double CLK_VIDEO = core_CLK_VIDEO;
 		const double output_CLK_VIDEO = v_cur.Fpix;

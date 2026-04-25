@@ -50,6 +50,14 @@ static MisterJoyShm *g_joy_shm = nullptr;
 // scope (NOT inside the anonymous namespace) so it matches the header.
 extern "C" int g_direct_p2p_handoff_armed = 0;
 
+// Phase 10: aspect-ratio dispatch global. The wrapper's video.cpp consumes
+// this when computing core_CLK_VIDEO for the YC subcarrier (4:3 PLL = 27.0
+// MHz, widescreen PLL = 1010/29 MHz). It MUST live at namespace scope (not
+// the anonymous namespace below) so video.cpp's extern declaration resolves
+// to the same symbol — same pattern as g_direct_p2p_handoff_armed above.
+// Values: 0 = kAspectRatio4x3, 1 = kAspectRatioFull (widescreen).
+extern "C" int g_wrapper_aspect_ratio = 0;
+
 namespace {
 
 constexpr const char *kCoreName = "Sonic Mania";
@@ -153,7 +161,9 @@ int g_wrapper_arm_clock = kArmClockStock;
 int g_wrapper_arm_clock_active = kArmClockStock;
 int g_wrapper_game_mode = kGameModeConsole;
 int g_wrapper_hold_to_pause = kHoldToPauseOff;
-int g_wrapper_aspect_ratio = kAspectRatio4x3;
+// g_wrapper_aspect_ratio defined at file scope above (line ~52) with
+// extern "C" linkage so video.cpp can see it. Initial value matches
+// kAspectRatio4x3 = 0.
 int g_wrapper_h_position = 0;
 int g_wrapper_v_position = 0;
 int g_wrapper_vertical_crop = 0;
