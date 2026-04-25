@@ -1855,6 +1855,25 @@ void set_runtime_environment(const StartupScaleModeSelection &startup_scale_mode
 		       fps_overlay == 1 ? "1" :
 		       fps_overlay == 2 ? "2" : "0", 1);
 	}
+
+	// ---- Phase 10: per-RBF static aspect-ratio dispatch ----
+	//
+	// "Option A" ships two RBFs from one source tree (Sonic_Mania.rbf and
+	// Sonic_Mania_169.rbf) that the user picks at the MiSTer menu. The
+	// wrapper detects which RBF MiSTer just loaded by inspecting the RBF
+	// filename in argv[1] and emits SONIC_MANIA_ASPECT=widescreen for the
+	// 16:9 RBF or SONIC_MANIA_ASPECT=4:3 otherwise. The engine reads this
+	// env var in MiSTerRenderDevice::Init() and selects pixWidth (320 vs.
+	// 424) plus the matching DDR3 frame-buffer geometry via
+	// NativeVideoWriter_SetDims.
+	//
+	// Detection happens in sonicmania_wrapper_run() (which has access to
+	// argv) and stores the result in g_wrapper_aspect_ratio. This function
+	// just emits the env var.
+	{
+		const bool widescreen = (g_wrapper_aspect_ratio == kAspectRatioFull);
+		setenv("SONIC_MANIA_ASPECT", widescreen ? "widescreen" : "4:3", 1);
+	}
 }
 
 void split_message_line(const char *start, char *line, size_t line_size)
@@ -2406,6 +2425,47 @@ const char *wrapper_rbf_name(bool forced, int argc, char *argv[])
 	return user_io_get_core_name(1);
 }
 
+// Phase 10: detect 16:9 vs 4:3 from the RBF filename MiSTer loaded.
+//
+// Canonical convention (must match tools/mister-wrapper/build-core.sh
+// --aspect 16:9 output): the 16:9 RBF carries the "_169" suffix
+// (e.g. "Sonic_Mania_169.rbf"). The wrapper accepts a few additional
+// markers ("(16:9)", "(16-9)") so a manually renamed deployment still
+// works. Anything else falls back to 4:3.
+//
+// Returns kAspectRatioFull (=widescreen) or kAspectRatio4x3.
+int detect_aspect_from_rbf(const char *rbf_path)
+{
+	if (!rbf_path || !rbf_path[0]) return kAspectRatio4x3;
+
+	// Skip directory components — match against basename only.
+	const char *base = rbf_path;
+	for (const char *p = rbf_path; *p; ++p)
+	{
+		if (*p == '/' || *p == '\\') base = p + 1;
+	}
+
+	// Lower-case copy for case-insensitive scanning.
+	char buf[256] = {};
+	size_t n = 0;
+	for (size_t i = 0; base[i] && n + 1 < sizeof(buf); ++i)
+	{
+		char c = base[i];
+		if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+		buf[n++] = c;
+	}
+	buf[n] = 0;
+
+	if (strstr(buf, "_169") ||
+	    strstr(buf, "(16:9)") ||
+	    strstr(buf, "(16-9)") ||
+	    strstr(buf, "16x9"))
+	{
+		return kAspectRatioFull;
+	}
+	return kAspectRatio4x3;
+}
+
 int wait_for_child(pid_t child, bool service_ui)
 {
 	int status = 0;
@@ -2577,6 +2637,11 @@ int sonicmania_wrapper_run(int argc, char *argv[])
 	g_wrapper_game_mode = read_runtime_game_mode_default();
 	g_wrapper_hold_to_pause = read_runtime_hold_to_pause_default();
 	g_wrapper_aspect_ratio = read_runtime_aspect_ratio_default();
+	// Phase 10: RBF filename is authoritative for aspect dispatch — overrides
+	// any persisted config value. Two RBFs ship from one source tree:
+	// Sonic_Mania.rbf (4:3) and Sonic_Mania_169.rbf (16:9). The MiSTer menu
+	// loads one of them; this is how we know which one.
+	g_wrapper_aspect_ratio = detect_aspect_from_rbf((argc > 1) ? argv[1] : nullptr);
 	g_wrapper_h_position = read_runtime_h_position_default();
 	g_wrapper_v_position = read_runtime_v_position_default();
 	g_wrapper_vertical_crop = read_runtime_vertical_crop_default();
@@ -2752,18 +2817,20 @@ int sonicmania_wrapper_run(int argc, char *argv[])
 
 		set_runtime_environment(startup_scale_mode);
 
-		// Phase 9 scope cut: log the resolved status-bit env vars for on-device
-		// verification. Aspect ratio dropped (status[13] reserved for Phase 10).
+		// Phase 9 scope cut + Phase 10: log resolved status-bit env vars and
+		// the per-RBF aspect dispatch result.
 		{
 			const char *mods_env    = getenv("SONIC_MANIA_MODS");
 			const char *fps_env     = getenv("SONIC_MANIA_FPS_OVERLAY");
+			const char *aspect_env  = getenv("SONIC_MANIA_ASPECT");
 			const uint32_t mods_on     = user_io_status_get("[10]");
 			const uint32_t fps_overlay = user_io_status_get("[12:11]");
 			write_log_line(wrapper_log,
-			               "phase9: SONIC_MANIA_MODS=%s SONIC_MANIA_FPS_OVERLAY=%s (mods_on=%u fps=%u)",
+			               "phase9: SONIC_MANIA_MODS=%s SONIC_MANIA_FPS_OVERLAY=%s SONIC_MANIA_ASPECT=%s (mods_on=%u fps=%u aspect=%d)",
 			               mods_env    ? mods_env    : "(unset)",
 			               fps_env     ? fps_env     : "(unset)",
-			               mods_on, fps_overlay);
+			               aspect_env  ? aspect_env  : "(unset)",
+			               mods_on, fps_overlay, g_wrapper_aspect_ratio);
 		}
 
 		int last_run_fd = open(kLastRunLogPath, O_WRONLY | O_CREAT | O_TRUNC | O_APPEND | O_CLOEXEC, 0644);

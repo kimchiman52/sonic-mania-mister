@@ -19,6 +19,10 @@ MISTER_PASSWORD="${MISTER_PASSWORD:-1}"
 WRAPPER_BIN="${ROOT_DIR}/build/mister-wrapper-hps/MiSTer_SonicMania"
 TEST_FRAME_WRITER="${ROOT_DIR}/build/mister-wrapper-hps/test-frame-writer"
 RBF_LOCAL="${ROOT_DIR}/build/mister-wrapper-core/Sonic_Mania.rbf"
+# Phase 10: optional 16:9 widescreen RBF (built via build-core.sh --aspect 16:9).
+# Filename suffix "_169" is the canonical aspect marker; the wrapper detects
+# it from argv[1] at core-load time and emits SONIC_MANIA_ASPECT=widescreen.
+RBF_LOCAL_169="${ROOT_DIR}/build/mister-wrapper-core/Sonic_Mania_169.rbf"
 
 have_sshpass() { command -v sshpass >/dev/null 2>&1; }
 
@@ -52,13 +56,23 @@ else
     echo "!! no wrapper binary at ${WRAPPER_BIN}; run tools/mister-wrapper/build-hps.sh first"
 fi
 
-# RBF
+# RBF (4:3, default aspect)
 if [ -f "${RBF_LOCAL}" ]; then
     echo "-> copy RBF ${RBF_LOCAL} -> /media/fat/_Other/Sonic Mania.rbf"
     scp_remote "${RBF_LOCAL}" "/media/fat/_Other/Sonic Mania.rbf"
 else
-    echo "!! no RBF at ${RBF_LOCAL}"
-    echo "   (not a deploy blocker; Step 2-3 Quartus build must run separately on colima quartus2 VM)"
+    echo "!! no 4:3 RBF at ${RBF_LOCAL}"
+    echo "   (not a deploy blocker; Quartus build runs separately on colima quartus2 VM)"
+fi
+
+# Phase 10: 16:9 widescreen RBF (optional). Shipped under a filename that
+# preserves the "_169" marker so the wrapper's detect_aspect_from_rbf()
+# resolves SONIC_MANIA_ASPECT=widescreen at core-load time.
+if [ -f "${RBF_LOCAL_169}" ]; then
+    echo "-> copy 16:9 RBF ${RBF_LOCAL_169} -> /media/fat/_Other/Sonic Mania_169.rbf"
+    scp_remote "${RBF_LOCAL_169}" "/media/fat/_Other/Sonic Mania_169.rbf"
+else
+    echo "(no 16:9 RBF at ${RBF_LOCAL_169}; Phase 10 widescreen not deployed this run)"
 fi
 
 # Test frame writer -- place under /media/fat/games/sonic-mania/.
@@ -73,7 +87,12 @@ else
     echo "!! no test-frame-writer at ${TEST_FRAME_WRITER}"
 fi
 
-# Inject [Sonic Mania] section into MiSTer.ini if not already present.
+# Inject [Sonic Mania] and [Sonic Mania (16:9)] sections into MiSTer.ini.
+#
+# Both sections route through the same wrapper binary (main=MiSTer_SonicMania)
+# and both disable the HDMI scaler (vga_scaler=0) so native_video reaches the
+# CRT. The wrapper differentiates the two cores at runtime by inspecting the
+# RBF filename it was loaded with (Sonic_Mania.rbf vs Sonic_Mania_169.rbf).
 ssh_remote 'bash -s' <<'REMOTE_INI'
 INI=/media/fat/MiSTer.ini
 if ! grep -qi '^\[Sonic Mania\]' "$INI" 2>/dev/null && ! grep -qi '^\[SonicMania\]' "$INI" 2>/dev/null; then
@@ -86,6 +105,22 @@ EOF
     echo "MiSTer.ini: added [Sonic Mania] section"
 else
     echo "MiSTer.ini: [Sonic Mania] already present (not modified)"
+fi
+
+# Phase 10: per-RBF section for the 16:9 widescreen variant. MiSTer matches
+# the section header against the core name shown in its menu, which for the
+# Sonic_Mania_169.rbf comes from the CONF_STR header "Sonic Mania (16:9);..."
+# patched into menu.sv at build time.
+if ! grep -qi '^\[Sonic Mania (16:9)\]' "$INI" 2>/dev/null; then
+    cat >> "$INI" << EOF
+
+[Sonic Mania (16:9)]
+main=MiSTer_SonicMania
+vga_scaler=0
+EOF
+    echo "MiSTer.ini: added [Sonic Mania (16:9)] section"
+else
+    echo "MiSTer.ini: [Sonic Mania (16:9)] already present (not modified)"
 fi
 REMOTE_INI
 

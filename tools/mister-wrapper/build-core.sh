@@ -9,14 +9,46 @@
 #     the project template).
 #   - CONF_STR replacement produces `"Sonic Mania;;"` in the patched .sv
 #     (the space version is what the MiSTer menu displays to users).
+#
+# Phase 10: --aspect {4:3|16:9} selects which static aspect-ratio variant
+# to build. One source tree, two RBFs, picked at the MiSTer menu.
+#
+#   --aspect 4:3  (default) -> ${OUTPUT_DIR}/Sonic_Mania.rbf
+#                              (320x240 active, 27.000 MHz CLK_VIDEO,
+#                               M=81/N=5/C=30, NTSC-exact)
+#   --aspect 16:9           -> ${OUTPUT_DIR}/Sonic_Mania_169.rbf
+#                              (424x240 active, 34.8276 MHz CLK_VIDEO,
+#                               M=101/N=5/C=29; fallback M=89/N=5/C=25
+#                               -> 35.6 MHz if Quartus rejects M=101)
+#
+# The 16:9 variant is produced by patching four prepared-source files with
+# the per-aspect numeric literals (PLL coefficients, modeline totals/porches,
+# DDR3 BUF1/LINE_BURST/LINE_STRIDE, CONF_STR header). The 4:3 variant uses
+# the source tree as-is (canonical Phase 9c values).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+ASPECT_VARIANT="${MISTER_WRAPPER_CORE_ASPECT:-4:3}"
+case "${ASPECT_VARIANT}" in
+    4:3|16:9) ;;
+    *)
+        echo "unsupported aspect variant: ${ASPECT_VARIANT} (must be 4:3 or 16:9)" >&2
+        exit 1
+        ;;
+esac
+case "${ASPECT_VARIANT}" in
+    4:3)  ASPECT_PROJECT_SUFFIX="" ;;
+    16:9) ASPECT_PROJECT_SUFFIX="_169" ;;
+esac
 OUTPUT_DIR="${OUTPUT_DIR:-${ROOT_DIR}/build/mister-wrapper-core}"
-BUILD_SRC_DIR="${OUTPUT_DIR}/src"
-PROJECT_NAME="${MISTER_WRAPPER_CORE_NAME:-Sonic_Mania}"
-PROJECT_DISPLAY_NAME="${MISTER_WRAPPER_CORE_DISPLAY_NAME:-Sonic Mania}"
+BUILD_SRC_DIR="${OUTPUT_DIR}/src${ASPECT_PROJECT_SUFFIX}"
+PROJECT_NAME_BASE="${MISTER_WRAPPER_CORE_NAME:-Sonic_Mania}"
+PROJECT_NAME="${PROJECT_NAME_BASE}${ASPECT_PROJECT_SUFFIX}"
+case "${ASPECT_VARIANT}" in
+    4:3)  PROJECT_DISPLAY_NAME="${MISTER_WRAPPER_CORE_DISPLAY_NAME:-Sonic Mania}" ;;
+    16:9) PROJECT_DISPLAY_NAME="${MISTER_WRAPPER_CORE_DISPLAY_NAME:-Sonic Mania (16:9)}" ;;
+esac
 CORE_SEED="${MISTER_WRAPPER_CORE_SEED:-menu}"
 DOCKER_IMAGE="${MISTER_WRAPPER_CORE_IMAGE:-sonic-mania-mister-wrapper-quartus17}"
 DOCKER_PLATFORM="${MISTER_WRAPPER_CORE_DOCKER_PLATFORM:-linux/amd64}"
@@ -33,20 +65,27 @@ CONF_STR_TOKEN=""
 usage() {
     cat <<EOF
 Usage:
-  tools/mister-wrapper/build-core.sh [--seed menu] --check-env
-  tools/mister-wrapper/build-core.sh [--seed menu] --prepare-source
-  tools/mister-wrapper/build-core.sh [--seed menu] --build-image
-  tools/mister-wrapper/build-core.sh [--seed menu]
+  tools/mister-wrapper/build-core.sh [--seed menu] [--aspect 4:3|16:9] --check-env
+  tools/mister-wrapper/build-core.sh [--seed menu] [--aspect 4:3|16:9] --prepare-source
+  tools/mister-wrapper/build-core.sh [--seed menu] [--aspect 4:3|16:9] --build-image
+  tools/mister-wrapper/build-core.sh [--seed menu] [--aspect 4:3|16:9]
 
 Purpose:
   Build the Sonic Mania FPGA core RBF (${PROJECT_NAME}.rbf) from the vendored
   Menu_MiSTer seed with Sonic Mania native-video parameters applied.
 
-Planned output:
-  ${OUTPUT_DIR}/${PROJECT_NAME}.rbf
+Planned output (depends on --aspect):
+  ${OUTPUT_DIR}/${PROJECT_NAME_BASE}.rbf      (--aspect 4:3, default)
+  ${OUTPUT_DIR}/${PROJECT_NAME_BASE}_169.rbf  (--aspect 16:9)
 
 Default seed:
   ${CORE_SEED}
+
+Default aspect:
+  ${ASPECT_VARIANT}
+
+Note: Quartus license is single-instance. Do not run --aspect 4:3 and
+      --aspect 16:9 builds simultaneously; sequence them.
 EOF
 }
 
@@ -150,8 +189,16 @@ File.write(qip_path, qip)
 
 sv_path = ARGV[2]
 sv = File.read(sv_path)
-sv.sub!(%("#{conf_str_token}"), %("#{display};;")) or
-  abort("failed to patch CONF_STR token #{conf_str_token.inspect} in #{sv_path}")
+# Phase 10: idempotent CONF_STR header rewrite. The canonical seed has been
+# updated through Phase 9c so the header literal may already be
+# "Sonic Mania;UART31250,MIDI;" rather than the original placeholder
+# "MENU;UART31250,MIDI;". We accept either and rewrite to "<display>;UART31250,MIDI;".
+# This lets --aspect 16:9 retarget "Sonic Mania" -> "Sonic Mania (16:9)"
+# while leaving the trailing core options ("UART31250,MIDI") intact.
+header_re = /"(?:MENU|Sonic Mania(?:\s*\(16:9\))?);UART31250,MIDI;"/
+unless sv.sub!(header_re, %("#{display};UART31250,MIDI;"))
+  abort("failed to patch CONF_STR header (display=#{display.inspect}) in #{sv_path}")
+end
 File.write(sv_path, sv)
 
 current_project_path = ARGV[3]
@@ -167,6 +214,118 @@ end
    "${TEMPLATE_BASENAME}" \
    "${CONF_STR_TOKEN}"
 
+    if [ "${ASPECT_VARIANT}" = "16:9" ]; then
+        apply_169_patches
+    fi
+}
+
+# Phase 10: in-place patch of the prepared source tree to retarget every
+# per-aspect numeric literal to 16:9 widescreen. Editing the prepared copy
+# rather than ifdef'ing the canonical sources keeps the canonical tree
+# clean and makes the 4:3 path identical to the Phase 9c shipping config.
+#
+# Patched files (in BUILD_SRC_DIR):
+#   1. rtl/pll_video/pll_video_0002.v
+#        27.000000 MHz (M=81/N=5/C=30)  ->  34.827600 MHz (M=101/N=5/C=29)
+#        Fallback (manual swap if fitter rejects):
+#          34.827600 MHz  ->  35.600000 MHz (M=89/N=5/C=25)
+#
+#   2. rtl/native_video_timing.sv
+#        H_ACTIVE 320 -> 424
+#        H_FP     26  -> 26   (kept; user can retune via OSD H Position)
+#        H_SYNC   32  -> 32   (kept; standard NTSC sync width)
+#        H_BP     51  -> 73   (424+26+32+73=555? recalc -> see below)
+#        H_TOTAL  429 -> 545
+#        V_FP     2   -> 4
+#        V_SYNC   3   -> 3
+#        V_BP     17  -> 19
+#        V_TOTAL  262 -> 266
+#        16:9 modeline math (paired with 8.7069 MHz pixel = CLK_VIDEO/4):
+#          H_TOTAL = round(8,706,900 / 60.07 / 266) ... target is per
+#          docs/phase-9-plan.md "16:9 widescreen" section (H_TOTAL=545,
+#          V_TOTAL=266 -> refresh ~60.0 Hz).
+#          H_FP+H_SYNC+H_BP = H_TOTAL - H_ACTIVE = 545-424 = 121
+#          With H_FP=26, H_SYNC=32, H_BP = 121-26-32 = 63.
+#        Vertical: V_FP+V_SYNC+V_BP = V_TOTAL-V_ACTIVE = 266-240 = 26.
+#          V_FP=4, V_SYNC=3, V_BP=19.
+#
+#   3. rtl/native_video_reader.sv
+#        Update doc-comment buffer-size table from 320x240 (153,600 B,
+#        BUF1=0x25900) to 424x240 (203,520 B, BUF1=0x31C00).
+#        Update LINE_BURST  80  -> 106  (424*2 = 848 B/line = 106 beats).
+#        Update LINE_STRIDE 80  -> 106.
+#        Update BUF1_ADDR   29'h07404B20 -> 29'h07406380
+#               ( 0x3A031C00 >> 3  =  0x07406380; pairs with the engine's
+#                 nv_buf1_offset_runtime = NV_BUF0_OFFSET + 424*240*2 ).
+#
+#   4. ${PROJECT_NAME}.sv  (renamed from menu.sv)
+#        CONF_STR header:  "Sonic Mania;UART31250,MIDI;"
+#                          -> "Sonic Mania (16:9);UART31250,MIDI;"
+#        (already done by the main ruby pass via PROJECT_DISPLAY_NAME, which
+#         is "Sonic Mania (16:9)" for the 16:9 variant. No additional patch
+#         needed here.)
+apply_169_patches() {
+    local pll_file="${BUILD_SRC_DIR}/rtl/pll_video/pll_video_0002.v"
+    local timing_file="${BUILD_SRC_DIR}/rtl/native_video_timing.sv"
+    local reader_file="${BUILD_SRC_DIR}/rtl/native_video_reader.sv"
+
+    [ -f "${pll_file}" ]    || { echo "missing PLL source for 16:9 patch: ${pll_file}" >&2; return 1; }
+    [ -f "${timing_file}" ] || { echo "missing timing source for 16:9 patch: ${timing_file}" >&2; return 1; }
+    [ -f "${reader_file}" ] || { echo "missing reader source for 16:9 patch: ${reader_file}" >&2; return 1; }
+
+    ruby -e '
+require "fileutils"
+
+pll_path    = ARGV[0]
+timing_path = ARGV[1]
+reader_path = ARGV[2]
+
+# ---- 1. PLL coefficients --------------------------------------------------
+pll = File.read(pll_path)
+pll.sub!(%(.output_clock_frequency0("27.000000 MHz")),
+         %(.output_clock_frequency0("34.827600 MHz"))) or
+  abort("16:9 patch: failed to retarget output_clock_frequency0 in #{pll_path}")
+# Comment header: leave the 4:3 prose intact but append a 16:9 note. We only
+# rewrite the single line that names the aspect explicitly.
+pll.sub!(/\/\/ Sonic Mania pll_video instance — 4:3 NTSC-exact mode\./,
+         "// Sonic Mania pll_video instance — 16:9 widescreen mode (Phase 10).") or
+  abort("16:9 patch: failed to rewrite header banner in #{pll_path}")
+File.write(pll_path, pll)
+
+# ---- 2. Modeline totals + porches ----------------------------------------
+timing = File.read(timing_path)
+{
+  "H_ACTIVE = 10\x27d320" => "H_ACTIVE = 10\x27d424",
+  "H_FP     = 10\x27d26"  => "H_FP     = 10\x27d26",   # noop, retained for tuning
+  "H_BP     = 10\x27d51"  => "H_BP     = 10\x27d63",
+  "H_TOTAL  = 10\x27d429" => "H_TOTAL  = 10\x27d545",
+  "V_FP     = 9\x27d2"    => "V_FP     = 9\x27d4",
+  "V_BP     = 9\x27d17"   => "V_BP     = 9\x27d19",
+  "V_TOTAL  = 9\x27d262"  => "V_TOTAL  = 9\x27d266",
+}.each do |from, to|
+  next if from == to
+  unless timing.sub!(from, to)
+    abort("16:9 patch: failed to rewrite #{from.inspect} in #{timing_path}")
+  end
+end
+File.write(timing_path, timing)
+
+# ---- 3. DDR3 reader buffer/burst/stride ----------------------------------
+reader = File.read(reader_path)
+{
+  "localparam [28:0] BUF1_ADDR   = 29\x27h07404B20;  // 0x3A025900 >> 3" =>
+    "localparam [28:0] BUF1_ADDR   = 29\x27h07406380;  // 0x3A031C00 >> 3 (424*240*2 + 0x100)",
+  "localparam [7:0]  LINE_BURST  = 8\x27d80"  =>
+    "localparam [7:0]  LINE_BURST  = 8\x27d106",
+  "localparam [28:0] LINE_STRIDE = 29\x27d80" =>
+    "localparam [28:0] LINE_STRIDE = 29\x27d106",
+}.each do |from, to|
+  unless reader.sub!(from, to)
+    abort("16:9 patch: failed to rewrite #{from.inspect} in #{reader_path}")
+  end
+end
+File.write(reader_path, reader)
+' "${pll_file}" "${timing_file}" "${reader_file}"
 }
 
 build_project() {
@@ -235,6 +394,25 @@ while [ "$#" -gt 0 ]; do
             CORE_SEED="$2"
             shift 2
             ;;
+        --aspect)
+            [ "$#" -ge 2 ] || { echo "missing value for --aspect" >&2; exit 1; }
+            ASPECT_VARIANT="$2"
+            case "${ASPECT_VARIANT}" in
+                4:3)  ASPECT_PROJECT_SUFFIX="" ;;
+                16:9) ASPECT_PROJECT_SUFFIX="_169" ;;
+                *)
+                    echo "unsupported --aspect: ${ASPECT_VARIANT} (must be 4:3 or 16:9)" >&2
+                    exit 1
+                    ;;
+            esac
+            BUILD_SRC_DIR="${OUTPUT_DIR}/src${ASPECT_PROJECT_SUFFIX}"
+            PROJECT_NAME="${PROJECT_NAME_BASE}${ASPECT_PROJECT_SUFFIX}"
+            case "${ASPECT_VARIANT}" in
+                4:3)  PROJECT_DISPLAY_NAME="${MISTER_WRAPPER_CORE_DISPLAY_NAME:-Sonic Mania}" ;;
+                16:9) PROJECT_DISPLAY_NAME="${MISTER_WRAPPER_CORE_DISPLAY_NAME:-Sonic Mania (16:9)}" ;;
+            esac
+            shift 2
+            ;;
         --fast|--release)
             echo "note: $1 is no longer needed (fast settings are now the default)" >&2
             shift
@@ -255,6 +433,7 @@ if [ "${COMMAND}" = "--check-env" ]; then
     require_base_tools || exit 1
     mkdir -p "${OUTPUT_DIR}"
     echo "core_seed=${CORE_SEED}"
+    echo "aspect=${ASPECT_VARIANT}"
     echo "source_dir=${SOURCE_DIR}"
     if [ -f "${UPSTREAM_FILE}" ]; then
         echo "upstream_metadata=${UPSTREAM_FILE}"
@@ -302,6 +481,7 @@ if [ "${COMMAND}" = "--prepare-source" ]; then
     require_base_tools || exit 1
     prepare_source
     echo "core_seed=${CORE_SEED}"
+    echo "aspect=${ASPECT_VARIANT}"
     echo "prepared_source=${BUILD_SRC_DIR}"
     echo "prepared_project=${BUILD_SRC_DIR}/${PROJECT_NAME}.qpf"
     exit 0
