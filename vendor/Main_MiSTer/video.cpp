@@ -3066,25 +3066,20 @@ static void set_yc_mode()
 		float fps = current_video_info.vtime ? (100000000.f / current_video_info.vtime) : 0.f;
 		int pal = fps < 55.f;
 		double CLK_REF = (pal || (cfg.ntsc_mode == 1)) ? 4.43361875f : (cfg.ntsc_mode == 2) ? 3.575611f : 3.579545f;
-		/* When native video is active (Sonic Mania), CLK_VIDEO is selected by
-		   the Phase-9 dual-PLL mux on status[13] (aspect bit). The YC encoder
-		   runs at this frequency, and its value is critical for correct
-		   S-Video color on CRT: it drives PHASE_INC and COLORBURST_START/END
-		   below. If wrong, the subcarrier phase is off and S-Video is
-		   grayscale or mis-tinted. See docs/phase-4-plan.md §6.8 (history)
-		   and docs/phase-9-plan.md (dual-modeline). */
-		// Phase 9: dual-modeline. CLK_VIDEO is selected by status[13] aspect bit,
-		// matching menu.sv's pll_video / pll_video_169 glitch-free clock mux.
-		//   4:3:  M=81/N=5/C=30 -> 27.000000 MHz exact.
-		//   16:9: M=101/N=5/C=29 -> 1010/29 MHz = 34.827586 MHz (bit-exact rational).
-		//   16:9 fallback (M=89/N=5/C=25 -> 35.600 MHz): if step-1 PLL fitter
-		//   rejected M=101 and used the fallback, change `(1010.0 / 29.0)` to
-		//   `(1780.0 / 50.0)`. Mismatch causes S-Video grayscale (YC subcarrier
-		//   phase math depends on CLK_VIDEO matching the actual PLL output).
-		const bool aspect_169_native = (user_io_status_get("[13]") != 0);
+		/* When native video is active (Sonic Mania), CLK_VIDEO is the dedicated
+		   video PLL output. The YC encoder runs at this frequency, and its
+		   value is critical for correct S-Video color on CRT: it drives
+		   PHASE_INC and COLORBURST_START/END below. If wrong, the subcarrier
+		   phase is off and S-Video is grayscale or mis-tinted.
+		   See docs/phase-4-plan.md §6.8 (history) and
+		   docs/phase-9-scopecut-report.md (NTSC-exact retune). */
+		// Phase 9 scope cut: 4:3 only at 27.000 MHz (M=81/N=5/C=30 exact).
+		// Was 24.6032 MHz (M=62/N=3/C=42) in Phase 4; retuned to NTSC-exact
+		// 15,734 Hz H-freq. 16:9 widescreen deferred to Phase 10
+		// (altpll_reconfig — Cyclone V hdmi_clk_sw rejects cascaded clock
+		// muxes, so static dual-PLL path is architecturally impossible).
 		const double core_CLK_VIDEO = native_video_enabled
-			? (aspect_169_native ? (1010.0 / 29.0)  // 16:9: 34.827586 MHz
-			                     : 27.0)            // 4:3:  27.000000 MHz
+			? 27.0  // NTSC-exact 4:3 modeline
 			: (current_video_info.ctime * 100.f / current_video_info.ptime);
 		double CLK_VIDEO = core_CLK_VIDEO;
 		const double output_CLK_VIDEO = v_cur.Fpix;

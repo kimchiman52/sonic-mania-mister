@@ -1841,31 +1841,19 @@ void set_runtime_environment(const StartupScaleModeSelection &startup_scale_mode
 	// Status bit map (must match vendor/Menu_MiSTer/menu.sv CONF_STR):
 	//   status[10]    : Mods         (0 = On default, 1 = Off)
 	//   status[12:11] : FPS Overlay  (00 = Off, 01 = Simple, 10 = Detailed)
-	//   status[13]    : Aspect Ratio (0 = 4:3 default, 1 = Widescreen)
+	//   status[13]    : RESERVED for Phase 10 Aspect Ratio (altpll_reconfig)
 	//
 	// env vars consumed by the engine binary (RSDKv5):
 	//   SONIC_MANIA_MODS         "0" disables ModAPI scan, "1" enables (default)
 	//   SONIC_MANIA_FPS_OVERLAY  "0" off, "1" simple, "2" detailed
-	//   SONIC_MANIA_ASPECT       "43" or "169"
 	{
 		const uint32_t mods_off    = user_io_status_get("[10]");
 		const uint32_t fps_overlay = user_io_status_get("[12:11]");
-		const uint32_t aspect_169  = user_io_status_get("[13]");
 
 		setenv("SONIC_MANIA_MODS",   mods_off ? "0" : "1", 1);
 		setenv("SONIC_MANIA_FPS_OVERLAY",
 		       fps_overlay == 1 ? "1" :
 		       fps_overlay == 2 ? "2" : "0", 1);
-		setenv("SONIC_MANIA_ASPECT", aspect_169 ? "169" : "43", 1);
-
-		// Phase 9 P-2.4: belt-and-suspenders settle delay for the FPGA's
-		// 2-FF aspect_169 synchronizer + hps_io status push before the engine
-		// starts writing DDR3. Cold boot has tens of ms of wrapper overhead
-		// that covers this naturally, but on Restart toggle the gap between
-		// setenv and execve can be milliseconds. 50 ms keeps the toggle
-		// boundary clean. If torn frames at toggle, plan §6 says raise to
-		// 200 ms or extend the FF chain to 3 stages.
-		usleep(50000);
 	}
 }
 
@@ -2012,7 +2000,6 @@ void poll_status_changes(pid_t child)
 	// detection here for future runtime-applied controls.
 	static uint32_t prev_mods         = 0xFFFFFFFF;
 	static uint32_t prev_fps_overlay  = 0xFFFFFFFF;
-	static uint32_t prev_aspect_ratio = 0xFFFFFFFF;
 	static uint32_t prev_h_position = 0xFFFFFFFF;
 	static uint32_t prev_v_position = 0xFFFFFFFF;
 	static uint32_t prev_vertical_crop = 0xFFFFFFFF;
@@ -2052,19 +2039,11 @@ void poll_status_changes(pid_t child)
 	// churn while the build catches up; a follow-up cleanup pass can remove
 	// the unused write_runtime_*/kRuntime*CycleSignal definitions.
 
-	// Phase 9: Aspect Ratio moved to status[13]. Engine reads
-	// SONIC_MANIA_ASPECT on startup; runtime poll just tracks UI state.
-	uint32_t aspect_ratio = user_io_status_get("[13]");
-	if (aspect_ratio != prev_aspect_ratio) {
-		prev_aspect_ratio = aspect_ratio;
-		int target = (int)aspect_ratio;
-		if (target != g_wrapper_aspect_ratio) {
-			write_runtime_aspect_ratio_default(target);
-			g_wrapper_aspect_ratio = target;
-			// No child signal: aspect ratio is pure FPGA/clock-mux state.
-			// Engine picks it up on next exec via SONIC_MANIA_ASPECT.
-		}
-	}
+	// Phase 9 scope cut: status[13] reserved for Phase 10 Aspect Ratio.
+	// 16:9 widescreen requires altpll_reconfig (dynamic PLL coefficient
+	// reconfig over Avalon-MM); Cyclone V hdmi_clk_sw clock-select primitive
+	// rejects cascaded clock muxes, so static dual-PLL path is impossible.
+	// The poll handler will land in Phase 10 alongside the IP wizard config.
 
 	uint32_t h_position = user_io_status_get("[28:25]");
 	if (h_position != prev_h_position) {
@@ -2139,10 +2118,10 @@ void poll_status_changes(pid_t child)
 	uint32_t triggers = user_io_status_trigger_take();
 
 	if (triggers & (1u << 21)) {
-		// Reset to Default — Phase 9 bit map.
+		// Reset to Default — Phase 9 scope cut bit map.
 		user_io_status_set("[10]", 0);    // Mods = On (default)
 		user_io_status_set("[12:11]", 0); // FPS Overlay = Off
-		user_io_status_set("[13]", 0);    // Aspect Ratio = 4:3
+		// status[13] reserved for Phase 10 Aspect Ratio
 		user_io_status_set("[28:25]", 0); // H Position = 0
 		user_io_status_set("[46:43]", 0); // V Position = 0
 		user_io_status_set("[32]", 0);    // Vertical Crop = Disabled
@@ -2151,7 +2130,6 @@ void poll_status_changes(pid_t child)
 		user_io_status_set("[42:39]", 0); // H Size = 0
 		prev_mods          = 0xFFFFFFFF;
 		prev_fps_overlay   = 0xFFFFFFFF;
-		prev_aspect_ratio  = 0xFFFFFFFF;
 		prev_h_position    = 0xFFFFFFFF;
 		prev_v_position    = 0xFFFFFFFF;
 		prev_vertical_crop = 0xFFFFFFFF;
@@ -2653,12 +2631,12 @@ int sonicmania_wrapper_run(int argc, char *argv[])
 	// menu reflects the actual runtime settings. This overwrites any values
 	// loaded from Sonic Mania.CFG by user_io_init -- the game config is authoritative.
 	//
-	// Phase 9 bit map (3sx-specific bits removed; see vendor/Menu_MiSTer/menu.sv):
+	// Phase 9 scope cut bit map (3sx-specific bits removed; see vendor/Menu_MiSTer/menu.sv):
 	//   - status[10]    : Mods (default On=0; persisted state is in g_wrapper_mods,
 	//                     not yet promoted from g_wrapper_* — defaults to On until
 	//                     a follow-up adds persistence).
 	//   - status[12:11] : FPS Overlay (re-uses g_wrapper_fps_mode value range 0..2)
-	//   - status[13]    : Aspect Ratio (g_wrapper_aspect_ratio: 0=4:3, 1=Widescreen)
+	//   - status[13]    : RESERVED for Phase 10 Aspect Ratio (altpll_reconfig).
 	//   - status[28:25], [32], [36:33], [38:37], [42:39], [46:43]: HDMI scaler
 	//     adjustments — unchanged from baseline.
 	if (g_wrapper_used_full_user_io_init)
@@ -2667,7 +2645,6 @@ int sonicmania_wrapper_run(int argc, char *argv[])
 		// set_runtime_environment() is the authoritative read on launch.
 		user_io_status_set("[10]", 0);
 		user_io_status_set("[12:11]", (uint32_t)g_wrapper_fps_mode);
-		user_io_status_set("[13]", (uint32_t)g_wrapper_aspect_ratio);
 		user_io_status_set("[28:25]", (uint32_t)g_wrapper_h_position);
 		user_io_status_set("[46:43]", (uint32_t)g_wrapper_v_position);
 		user_io_status_set("[32]", (uint32_t)g_wrapper_vertical_crop);
@@ -2773,23 +2750,18 @@ int sonicmania_wrapper_run(int argc, char *argv[])
 
 		set_runtime_environment(startup_scale_mode);
 
-		// Phase 9: log the resolved status-bit env vars so on-device verification
-		// (step 6.2/6.3 in the plan) can grep wrapper.log for the 4:3 vs 16:9 boot
-		// signal. Reads back via getenv after set_runtime_environment so this stays
-		// in sync with whatever the function actually emitted.
+		// Phase 9 scope cut: log the resolved status-bit env vars for on-device
+		// verification. Aspect ratio dropped (status[13] reserved for Phase 10).
 		{
 			const char *mods_env    = getenv("SONIC_MANIA_MODS");
 			const char *fps_env     = getenv("SONIC_MANIA_FPS_OVERLAY");
-			const char *aspect_env  = getenv("SONIC_MANIA_ASPECT");
 			const uint32_t mods_off    = user_io_status_get("[10]");
 			const uint32_t fps_overlay = user_io_status_get("[12:11]");
-			const uint32_t aspect_169  = user_io_status_get("[13]");
 			write_log_line(wrapper_log,
-			               "phase9: SONIC_MANIA_MODS=%s SONIC_MANIA_FPS_OVERLAY=%s SONIC_MANIA_ASPECT=%s (mods_off=%u fps=%u aspect_169=%u)",
+			               "phase9: SONIC_MANIA_MODS=%s SONIC_MANIA_FPS_OVERLAY=%s (mods_off=%u fps=%u)",
 			               mods_env    ? mods_env    : "(unset)",
 			               fps_env     ? fps_env     : "(unset)",
-			               aspect_env  ? aspect_env  : "(unset)",
-			               mods_off, fps_overlay, aspect_169);
+			               mods_off, fps_overlay);
 		}
 
 		int last_run_fd = open(kLastRunLogPath, O_WRONLY | O_CREAT | O_TRUNC | O_APPEND | O_CLOEXEC, 0644);
@@ -3006,10 +2978,9 @@ int sonicmania_wrapper_run(int argc, char *argv[])
 			g_wrapper_arm_clock_active = g_wrapper_arm_clock;
 
 			// Re-seed status bits so the menu reflects current values after restart.
-			// Phase 9 bit map (3sx-specific bits removed).
+			// Phase 9 scope cut: status[13] reserved for Phase 10 (no seed).
 			user_io_status_set("[10]", 0); // Mods default On (no persistence yet)
 			user_io_status_set("[12:11]", (uint32_t)g_wrapper_fps_mode);
-			user_io_status_set("[13]", (uint32_t)g_wrapper_aspect_ratio);
 			user_io_status_set("[28:25]", (uint32_t)g_wrapper_h_position);
 			user_io_status_set("[46:43]", (uint32_t)g_wrapper_v_position);
 			user_io_status_set("[32]", (uint32_t)g_wrapper_vertical_crop);

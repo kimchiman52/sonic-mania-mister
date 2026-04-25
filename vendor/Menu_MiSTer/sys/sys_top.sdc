@@ -21,16 +21,6 @@ set_clock_groups -exclusive \
    -group [get_clocks { FPGA_CLK2_50 }] \
    -group [get_clocks { FPGA_CLK3_50 }]
 
-# Phase 9: dual video PLLs (4:3 vs 16:9) feed a glitch-free clock mux on
-# aspect_169 (status[13]). They are physically unrelated (27.000 MHz vs
-# 1010/29 MHz) and only one drives clk_pix at a time. Mark them exclusive so
-# Quartus does not emit cross-domain timing checks on the gated branches.
-# Verify the instance hierarchy in the fitter log if these patterns miss; the
-# pattern follows the existing PLL groups above. (Phase 9 P-2.3.)
-set_clock_groups -exclusive \
-   -group [get_clocks { *|pll_vid_43|pll_video_inst|altera_pll_i|*[0].*|divclk}] \
-   -group [get_clocks { *|pll_vid_169|pll_video_169_inst|altera_pll_i|*[0].*|divclk}]
-
 set_false_path -from [get_ports {KEY*}]
 set_false_path -from [get_ports {BTN_*}]
 set_false_path -to   [get_ports {LED_*}]

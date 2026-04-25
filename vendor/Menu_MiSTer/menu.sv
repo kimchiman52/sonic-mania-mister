@@ -186,11 +186,10 @@ assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 
 assign DDRAM_CLK = clk_sys;
 
-// CE_PIXEL: divide CLK_VIDEO by 4 for the effective pixel rate.
-// Phase 9 dual-modeline:
-//   4:3:  CLK_VIDEO = 27.000 MHz / 4 -> 6.750 MHz pixel
-//   16:9: CLK_VIDEO = 34.828 MHz / 4 -> 8.7069 MHz pixel
-// Integer divider = zero pixel timing jitter on either rate.
+// CE_PIXEL: divide CLK_VIDEO (27.000 MHz) by 4 for 6.750 MHz pixel rate.
+// Phase 9 scope cut: 4:3 only. NTSC-exact modeline: 6.750 MHz pixel /
+// 15,734 Hz H-freq. 16:9 dual-aspect deferred to Phase 10 (altpll_reconfig).
+// Integer divider = zero pixel timing jitter.
 reg [1:0] ce_div;
 wire ce_pix_div4 = (ce_div == 2'd0);
 wire ce_pix2x = (ce_div[0] == 1'b0);
@@ -202,19 +201,12 @@ assign CE_PIXEL = ce_pix_div4;
 
 assign VGA_SL = 0;
 assign VGA_F1 = 0;
-// Phase 9: aspect-ratio mode select.
-//   0 = 4:3 (320x240, 27 MHz CLK_VIDEO, 6.75 MHz pixel)
-//   1 = 16:9 widescreen (424x240, 34.828 MHz CLK_VIDEO, 8.7069 MHz pixel)
-// This bit feeds:
-//   - the glitch-free clock mux below (clk_pix_43 vs clk_pix_169)
-//   - native_video_top (timing + reader address mux)
-//   - HDMI scaler aspect (`ar_full` alias keeps existing scaler logic working)
-// Status[12] is repurposed as part of the FPS Overlay 2-bit field
-// (status[12:11]); we drop the bare status[12] read here and alias `ar_full`
-// to `aspect_169` so the HDMI scaler tracks native aspect (widescreen native
-// -> full-aspect scaler -> ARX=0/ARY=0 -> scaler fills display).
-wire aspect_169 = status[13];
-wire ar_full    = aspect_169;
+// Phase 9 scope cut: 4:3 only at 27.000 MHz CLK_VIDEO (320x240 active area).
+// status[13] is RESERVED for Phase 10 Aspect Ratio (16:9 widescreen) once
+// altpll_reconfig is implemented. status[12] is part of the FPS Overlay
+// 2-bit field (status[12:11]). HDMI scaler ar_full hardwired to 0 to drive
+// ARX=4/ARY=3 letterboxing for the 4:3 native frame.
+wire ar_full = 1'b0;
 
 // --- Vertical crop / integer scale (active on HDMI only, via video_freak) ---
 wire [11:0] vcrop_size = status[32] ? 12'd216 : 12'd0;
@@ -286,13 +278,16 @@ assign LED_POWER[0]= FB ? led[2] : act_cnt2[26] ? act_cnt2[25:18] > act_cnt2[7:0
 
 
 `include "build_id.v"
-// Phase 9: Sonic-Mania-specific OSD CONF_STR.
-// Status bit map (LOCKED — must match docs/phase-9-plan.md and
+// Phase 9 scope cut: Sonic-Mania-specific OSD CONF_STR (4:3 only).
+// Status bit map (must match docs/phase-9-scopecut-report.md and
 // vendor/Main_MiSTer/sonicmania_wrapper.cpp env-var emission):
 //   status[9]     : NATIVE_VID (preserved baseline; wired below)
 //   status[10]    : Mods            (0 = On default, 1 = Off)
 //   status[12:11] : FPS Overlay     (00 Off, 01 Simple, 10 Detailed)
-//   status[13]    : Aspect Ratio    (0 = 4:3 default, 1 = Widescreen)
+//   status[13]    : RESERVED for Phase 10 Aspect Ratio (altpll_reconfig
+//                   needed; Cyclone V hdmi_clk_sw rejects cascaded clock
+//                   muxes via altclkctrl, so dual-PLL static path is
+//                   architecturally impossible). Do not reuse this bit.
 //   status[21]    : Reset to Default (toggle)
 //   status[22]    : Restart          (toggle)
 //   status[28:25] : H Position
@@ -308,7 +303,6 @@ localparam CONF_STR = {
 	"O[10],Mods,On,Off;",
 	"O[12:11],FPS Overlay,Off,Simple,Detailed;",
 	"-;",
-	"O[13],Aspect Ratio,4:3,Widescreen;",
 	"O[32],Vertical Crop,Disabled,216p(5x);",
 	"O[36:33],Crop Offset,0,2,4,6,8,10,-12,-10,-8,-6,-4,-2;",
 	"O[38:37],Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
@@ -338,12 +332,12 @@ hps_io #(.CONF_STR(CONF_STR), .CONF_STR_BRAM(1)) hps_io
 
 ////////////////////   CLOCKS   ///////////////////
 wire locked, clk_sys;
-
-// Phase 9: dual video PLL.
-//   pll_video      -> 27.000 MHz exact   (4:3 mode, 6.75 MHz pixel after /4)
-//   pll_video_169  -> 34.828 MHz (1010/29) (16:9 mode, 8.7069 MHz pixel after /4)
-// Both PLLs run continuously; the active output drives clk_pix via a
-// glitch-free mux gated by `aspect_169` (status[13]).
+wire clk_pix;   // Dedicated video PLL: 27.000 MHz exact (CLK_VIDEO, /4 -> 6.75 MHz pixel)
+                // Phase 9 scope cut: 4:3 NTSC-exact modeline (M=81/N=5/C=30, VCO 810 MHz).
+                // 16:9 widescreen requires altpll_reconfig (Phase 10) since Cyclone V
+                // hdmi_clk_sw / vga_clk_sw clock-select blocks reject cascaded clock
+                // muxes — both static-mux (combinational AND/OR) and altclkctrl
+                // attempts hit Error (15836) "must be driven by a PLL's output clock".
 pll pll
 (
 	.refclk(CLK_50M),
@@ -352,49 +346,13 @@ pll pll
 	.locked(locked)
 );
 
-wire clk_pix_43, clk_pix_169;
-wire pll43_locked, pll169_locked;
-
-pll_video pll_vid_43
+pll_video pll_vid
 (
 	.refclk(CLK_50M),
 	.rst(0),
-	.outclk_0(clk_pix_43),
-	.locked(pll43_locked)
+	.outclk_0(clk_pix),
+	.locked()
 );
-
-pll_video_169 pll_vid_169
-(
-	.refclk(CLK_50M),
-	.rst(0),
-	.outclk_0(clk_pix_169),
-	.locked(pll169_locked)
-);
-
-// Glitch-free 2:1 clock mux on aspect_169.
-// Canonical Altera "Glitch-Free Clock Multiplexer" pattern:
-//   - synchronize the select to BOTH input clock domains (2-FF chain),
-//   - cross-couple enables so each clock is gated only when the OTHER
-//     clock's enable is deasserted (prevents sliver during the switch),
-//   - AND-OR the gated clocks.
-// Cyclone V `altclkctrl` IP implements this in fabric; the explicit pattern
-// keeps it visible in source for review.
-//
-// SDC note: if Quartus emits a critical warning about the gated clocks
-// (clk_pix_43_g / clk_pix_169_g), add to sys/sys_top.sdc:
-//   set_clock_groups -exclusive -group {clk_pix_43} -group {clk_pix_169}
-reg [1:0] sel_sync_43;
-reg [1:0] sel_sync_169;
-always @(posedge clk_pix_43)  sel_sync_43  <= {sel_sync_43[0],  ~aspect_169};
-always @(posedge clk_pix_169) sel_sync_169 <= {sel_sync_169[0],  aspect_169};
-
-wire en43  = sel_sync_43[1]  & ~sel_sync_169[1];
-wire en169 = sel_sync_169[1] & ~sel_sync_43[1];
-
-wire clk_pix_43_g  = clk_pix_43  & en43;
-wire clk_pix_169_g = clk_pix_169 & en169;
-
-wire clk_pix = clk_pix_43_g | clk_pix_169_g;
 
 assign CLK_VIDEO = clk_pix;
 
@@ -760,9 +718,6 @@ native_video_top native_video
 	.clk_vid        (CLK_VIDEO),
 	.ce_pix         (ce_pix_div4),
 	.reset          (RESET),
-
-	// Phase 9: aspect-ratio mode flows down through timing + reader
-	.aspect_169     (aspect_169),
 
 	// OSD position offsets (two's complement from status bits)
 	.h_offset       ($signed(status[28:25])),

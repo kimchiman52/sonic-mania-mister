@@ -1,15 +1,15 @@
 //============================================================================
 //
-//  Native Video Top-Level Wrapper (Sonic Mania) — Phase 9 dual-aspect.
+//  Native Video Top-Level Wrapper (Sonic Mania) — Phase 9 scope cut (4:3 only).
 //
 //  Instantiates the timing generator and DDR3 reader, providing a clean
-//  interface to menu.sv. Runs on CLK_VIDEO (27.000 MHz @ 4:3 / 34.828 MHz
-//  @ 16:9 — selected by glitch-free clock mux in menu.sv) with integer
-//  divide-by-4 ce_pix for 6.750 / 8.7069 MHz pixel rate respectively.
+//  interface to menu.sv. Runs on CLK_VIDEO (27.000 MHz, NTSC-exact 4:3
+//  modeline) with integer divide-by-4 ce_pix for 6.750 MHz pixel rate.
 //
-//  The `aspect_169` input flows from menu.sv `wire aspect_169 = status[13];`
-//  down through to both the timing generator (H/V totals) and the reader
-//  (BUF1_ADDR / LINE_BURST / LINE_STRIDE).
+//  16:9 widescreen support is deferred to Phase 10 (altpll_reconfig); the
+//  Cyclone V hdmi_clk_sw clock-select primitive rejects cascaded clock
+//  muxes, so the only path to runtime aspect switching is dynamic PLL
+//  coefficient reconfig via Avalon-MM.
 //
 //  Forked from 3S-ARM native_video_top.sv.
 //
@@ -20,12 +20,9 @@
 
 module native_video_top (
     input  wire        clk_sys,          // system clock (100 MHz) for DDR3
-    input  wire        clk_vid,          // video clock (27/34.828 MHz, CLK_VIDEO, aspect-keyed)
+    input  wire        clk_vid,          // video clock (27.000 MHz CLK_VIDEO)
     input  wire        ce_pix,           // pixel enable (divide-by-4)
     input  wire        reset,
-
-    // Phase 9: aspect-ratio mode select. 0 = 4:3, 1 = 16:9.
-    input  wire        aspect_169,
 
     // OSD position offsets (two's complement, passed to timing generator)
     input  wire signed [3:0] h_offset,   // -8 to +7 pixels
@@ -60,7 +57,7 @@ module native_video_top (
 
 // =========================================================================
 // Timing Generator
-// Runs on clk_vid (24.6032 MHz) with ce_pix gating at ~6.1508 MHz.
+// Runs on clk_vid (27.000 MHz) with ce_pix gating at 6.750 MHz.
 // H/V counters only advance on ce_pix pulses.
 // =========================================================================
 wire        tim_hsync;
@@ -77,8 +74,6 @@ native_video_timing timing (
     .clk        (clk_vid),
     .ce_pix     (ce_pix),
     .reset      (reset),
-
-    .aspect_169 (aspect_169),
 
     .h_offset   (h_offset),
     .v_offset   (v_offset),
@@ -97,7 +92,7 @@ native_video_timing timing (
 // =========================================================================
 // DDR3 Pixel Reader
 // Write side: ddr_clk (100 MHz)
-// Read side: clk_vid (24.6032 MHz) with ce_pix gating at ~6.1508 MHz
+// Read side: clk_vid (27.000 MHz) with ce_pix gating at 6.750 MHz
 // =========================================================================
 wire [7:0]  reader_r, reader_g, reader_b;
 wire        reader_frame_ready;
@@ -119,9 +114,6 @@ native_video_reader reader (
     .clk_vid        (clk_vid),
     .ce_pix         (ce_pix),
     .reset          (reset),
-
-    // Phase 9: aspect-keyed buffer addressing
-    .aspect_169     (aspect_169),
 
     // Timing signals
     .de             (tim_de),
