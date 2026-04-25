@@ -1412,7 +1412,11 @@ static advancedButtonMap *mapping_store = NULL;
 static uint32_t tmp_axis[4];
 static int tmp_axis_n = 0;
 
-static int grabbed = 1;
+// MiSTer Phase 4 Mania wrapper: default to NOT grabbing /dev/input exclusively,
+// so SDL2 in our game engine can also read controller events. Wrapper still
+// reads events for Home-button / OSD handling — EVIOCGRAB 0 is SHARED access,
+// not "ignore input." Upstream default (1) blocks SDL2's joystick subsystem.
+static int grabbed = 0;
 static int input_joy_passthrough = 0;
 
 static uint32_t osd_timer = 0;
