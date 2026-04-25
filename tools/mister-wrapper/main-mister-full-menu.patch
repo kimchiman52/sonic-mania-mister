@@ -1,17 +1,30 @@
 # Sonic Mania MiSTer wrapper: menu.cpp patch
 #
-# This is intentionally a no-op patch for Phase 4. The upstream `Main_MiSTer`
-# `menu.cpp` is used unchanged. The wrapper entry happens through our renamed
-# `sonicmania_main.cpp`, which replaces upstream `main.cpp` (excluded by
-# Makefile.full.sonic-mania via `$(filter-out main.cpp, ...)`). That's the
-# only wiring needed: `main()` calls `sonicmania_wrapper_run()`.
+# Phase 9c addition: hide the "Core" entry on the system OSD page (the page
+# the user lands on when they hit the OSD button while Sonic Mania is
+# running). 3sx-mister hides this entry too -- it would let the user load
+# arbitrary cores out from underneath our running game/wrapper, which is
+# not what they want from the in-game menu.
 #
-# The 3sx-mister `main-mister-full-menu.patch` injected direct-P2P netplay OSD
-# submenu items into `menu.cpp`. Sonic Mania defers wrapper-driven netplay
-# OSD to Phase 7 (per docs/phase-4-plan.md §6.5 -- "Input SHM (deferred)").
-# When that future phase re-enables SHM / wrapper OSD, a fresh patch will be
-# added here.
-#
-# `git apply --whitespace=nowarn` accepts this file as a zero-hunk patch and
-# completes successfully, so `tools/mister-wrapper/build-hps.sh` does not need
-# to special-case an absent patch.
+# Mechanics: delete the two MenuWrite lines that emit " Core ..." and the
+# blank separator row immediately after, and clear bit 0 of `menumask` so
+# the cursor cannot navigate to a now-nonexistent entry.
+diff --git a/menu.cpp b/menu.cpp
+--- a/menu.cpp
++++ b/menu.cpp
+@@ -2752,14 +2752,11 @@
+ 			while(1)
+ 			{
+ 				n = 0;
+-				menumask = 0x7805d;
++				menumask = 0x7805c;  // Sonic Mania: bit 0 cleared (Core entry hidden)
+
+ 				if (!menusub) firstmenu = 0;
+ 				adjvisible = 0;
+
+-				MenuWrite(n++, " Core                      \x16", menusub == 0, 0);
+-				MenuWrite(n++);
+-
+ 				if (cfg.osd_lock[0] && !cfg.osd_lock_time)
+ 				{
+ 					MenuWrite(n++, " Lock OSD", menusub == 1, 0);
