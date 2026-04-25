@@ -51,14 +51,21 @@ module native_video_timing (
 // subtracts from FP).  H_TOTAL and V_TOTAL are always preserved.
 //
 // 4:3 modeline rationale:
-//   H 320 active + 14 FP + 32 sync + 63 BP = 429 total
+//   H 320 active + 39 FP + 32 sync + 38 BP = 429 total
 //   V 240 active +  6 FP +  3 sync + 13 BP = 262 total
 //   refresh = 6,750,000 / (429*262) = 60.07 Hz
 //   H_freq  = 6,750,000 / 429       = 15,734 Hz (NTSC-exact)
+//
+// Porch distribution: H_BP=38 (≈5.63 µs at 6.75 MHz) hits NTSC's nominal
+// 5.7 µs back porch, centering the 320-pixel active region on the visible
+// raster. Earlier (FP=14, BP=63) put a ~1" black bar on the CRT's left
+// edge because the long back porch shifted active too far right.
+// V porches left unchanged (V_FP=6, V_BP=13) — user reported no vertical
+// centering complaint and standard NTSC 240p tolerates this distribution.
 localparam [9:0] H_ACTIVE = 10'd320;
-localparam [9:0] H_FP     = 10'd14;
+localparam [9:0] H_FP     = 10'd39;
 localparam [5:0] H_SYNC   = 6'd32;
-localparam [9:0] H_BP     = 10'd63;
+localparam [9:0] H_BP     = 10'd38;
 localparam [9:0] H_TOTAL  = 10'd429;
 
 localparam [8:0] V_ACTIVE = 9'd240;
@@ -68,16 +75,22 @@ localparam [8:0] V_BP     = 9'd13;
 localparam [8:0] V_TOTAL  = 9'd262;
 
 // Derived boundaries — adjusted by OSD offsets.
-// Positive offset shifts image right/down: adds to BP, subtracts from FP.
-// Sync pulse width and totals are invariant.
-wire signed [5:0] h_off_ext = {{2{h_offset[3]}}, h_offset};  // sign-extend to 6 bits
-wire signed [4:0] v_off_ext = {v_offset[3], v_offset};  // sign-extend to 5 bits
+// Positive offset shifts image right/down: subtracts from FP (sync earlier
+// → larger effective BP → image right). Sync width and totals invariant.
+//
+// Verilog gotcha: `H_FP - h_offset` mixes unsigned H_FP and signed h_offset.
+// Per IEEE 1364-2001, ANY unsigned operand makes the whole expression
+// unsigned, so a negative h_offset gets silently zero-extended (treated as
+// a large positive). Fix: sign-extend h_offset to the FULL result width
+// (10/9 bits) so two's-complement wrapping in unsigned arithmetic gives
+// the right answer. e.g. h=-1 → 10'b1111111111 → 1023 unsigned →
+// (H_FP+H_ACTIVE)-1023 wraps to (H_FP+H_ACTIVE)+1 in 10-bit modulo.
+wire [9:0] h_off_signext = {{6{h_offset[3]}}, h_offset};  // 10-bit two's-comp
+wire [8:0] v_off_signext = {{5{v_offset[3]}}, v_offset};  // 9-bit two's-comp
 
-// FP shrinks and BP grows by offset (or vice versa); sync width is fixed.
-// Only FP adjustment is needed to compute sync start; BP is implicit from total.
-wire [9:0] h_sync_start = H_ACTIVE + (H_FP - h_off_ext);
+wire [9:0] h_sync_start = H_ACTIVE + H_FP - h_off_signext;
 wire [9:0] h_sync_end   = h_sync_start + H_SYNC;
-wire [8:0] v_sync_start = V_ACTIVE + (V_FP - v_off_ext);
+wire [8:0] v_sync_start = V_ACTIVE + V_FP - v_off_signext;
 wire [8:0] v_sync_end   = v_sync_start + V_SYNC;
 
 always @(posedge clk) begin

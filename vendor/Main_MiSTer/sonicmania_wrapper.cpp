@@ -1839,18 +1839,18 @@ void set_runtime_environment(const StartupScaleModeSelection &startup_scale_mode
 	// ---- Phase 9: status-bit env-var emission ----
 	//
 	// Status bit map (must match vendor/Menu_MiSTer/menu.sv CONF_STR):
-	//   status[10]    : Mods         (0 = On default, 1 = Off)
+	//   status[10]    : Mods         (0 = Off default, 1 = On)
 	//   status[12:11] : FPS Overlay  (00 = Off, 01 = Simple, 10 = Detailed)
 	//   status[13]    : RESERVED for Phase 10 Aspect Ratio (altpll_reconfig)
 	//
 	// env vars consumed by the engine binary (RSDKv5):
-	//   SONIC_MANIA_MODS         "0" disables ModAPI scan, "1" enables (default)
+	//   SONIC_MANIA_MODS         "0" disables ModAPI scan, "1" enables
 	//   SONIC_MANIA_FPS_OVERLAY  "0" off, "1" simple, "2" detailed
 	{
-		const uint32_t mods_off    = user_io_status_get("[10]");
+		const uint32_t mods_on     = user_io_status_get("[10]");
 		const uint32_t fps_overlay = user_io_status_get("[12:11]");
 
-		setenv("SONIC_MANIA_MODS",   mods_off ? "0" : "1", 1);
+		setenv("SONIC_MANIA_MODS",   mods_on ? "1" : "0", 1);
 		setenv("SONIC_MANIA_FPS_OVERLAY",
 		       fps_overlay == 1 ? "1" :
 		       fps_overlay == 2 ? "2" : "0", 1);
@@ -2119,7 +2119,7 @@ void poll_status_changes(pid_t child)
 
 	if (triggers & (1u << 21)) {
 		// Reset to Default — Phase 9 scope cut bit map.
-		user_io_status_set("[10]", 0);    // Mods = On (default)
+		user_io_status_set("[10]", 0);    // Mods = Off (default)
 		user_io_status_set("[12:11]", 0); // FPS Overlay = Off
 		// status[13] reserved for Phase 10 Aspect Ratio
 		user_io_status_set("[28:25]", 0); // H Position = 0
@@ -2632,18 +2632,20 @@ int sonicmania_wrapper_run(int argc, char *argv[])
 	// loaded from Sonic Mania.CFG by user_io_init -- the game config is authoritative.
 	//
 	// Phase 9 scope cut bit map (3sx-specific bits removed; see vendor/Menu_MiSTer/menu.sv):
-	//   - status[10]    : Mods (default On=0; persisted state is in g_wrapper_mods,
-	//                     not yet promoted from g_wrapper_* — defaults to On until
-	//                     a follow-up adds persistence).
+	//   - status[10]    : Mods (default Off=0; CONF_STR labels swapped to "Off,On"
+	//                     so status[10]=0 → Mods=Off → SONIC_MANIA_MODS=0 in env).
 	//   - status[12:11] : FPS Overlay (re-uses g_wrapper_fps_mode value range 0..2)
 	//   - status[13]    : RESERVED for Phase 10 Aspect Ratio (altpll_reconfig).
 	//   - status[28:25], [32], [36:33], [38:37], [42:39], [46:43]: HDMI scaler
 	//     adjustments — unchanged from baseline.
 	if (g_wrapper_used_full_user_io_init)
 	{
-		// Mods defaults to On (0). No persistence yet; the env-var emission in
-		// set_runtime_environment() is the authoritative read on launch.
-		user_io_status_set("[10]", 0);
+		// Phase 9: do NOT seed status[10] (Mods). status_set here would clobber
+		// the value hps_io already loaded from the persistent BRAM/config —
+		// the previous "Mods default On (0)" seed was the bug behind "Restart
+		// flips Mods back to On". Default value (when no prior state exists)
+		// is determined by the CONF_STR option ordering: "Mods,Off,On" →
+		// status[10]=0 means Off, which is the desired post-rebuild default.
 		user_io_status_set("[12:11]", (uint32_t)g_wrapper_fps_mode);
 		user_io_status_set("[28:25]", (uint32_t)g_wrapper_h_position);
 		user_io_status_set("[46:43]", (uint32_t)g_wrapper_v_position);
@@ -2755,13 +2757,13 @@ int sonicmania_wrapper_run(int argc, char *argv[])
 		{
 			const char *mods_env    = getenv("SONIC_MANIA_MODS");
 			const char *fps_env     = getenv("SONIC_MANIA_FPS_OVERLAY");
-			const uint32_t mods_off    = user_io_status_get("[10]");
+			const uint32_t mods_on     = user_io_status_get("[10]");
 			const uint32_t fps_overlay = user_io_status_get("[12:11]");
 			write_log_line(wrapper_log,
-			               "phase9: SONIC_MANIA_MODS=%s SONIC_MANIA_FPS_OVERLAY=%s (mods_off=%u fps=%u)",
+			               "phase9: SONIC_MANIA_MODS=%s SONIC_MANIA_FPS_OVERLAY=%s (mods_on=%u fps=%u)",
 			               mods_env    ? mods_env    : "(unset)",
 			               fps_env     ? fps_env     : "(unset)",
-			               mods_off, fps_overlay);
+			               mods_on, fps_overlay);
 		}
 
 		int last_run_fd = open(kLastRunLogPath, O_WRONLY | O_CREAT | O_TRUNC | O_APPEND | O_CLOEXEC, 0644);
@@ -2979,7 +2981,9 @@ int sonicmania_wrapper_run(int argc, char *argv[])
 
 			// Re-seed status bits so the menu reflects current values after restart.
 			// Phase 9 scope cut: status[13] reserved for Phase 10 (no seed).
-			user_io_status_set("[10]", 0); // Mods default On (no persistence yet)
+			// status[10] (Mods) intentionally NOT re-seeded — hps_io retains the
+			// user's choice across the engine respawn. Earlier code seeded 0
+			// here and that's why Restart was flipping the Mods toggle back.
 			user_io_status_set("[12:11]", (uint32_t)g_wrapper_fps_mode);
 			user_io_status_set("[28:25]", (uint32_t)g_wrapper_h_position);
 			user_io_status_set("[46:43]", (uint32_t)g_wrapper_v_position);

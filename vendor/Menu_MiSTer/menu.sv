@@ -300,7 +300,7 @@ assign LED_POWER[0]= FB ? led[2] : act_cnt2[26] ? act_cnt2[25:18] > act_cnt2[7:0
 // SA Activation, SA Ghost Res, SA Ghost Count, Overclock.
 localparam CONF_STR = {
 	"Sonic Mania;UART31250,MIDI;",
-	"O[10],Mods,On,Off;",
+	"O[10],Mods,Off,On;",
 	"O[12:11],FPS Overlay,Off,Simple,Detailed;",
 	"-;",
 	"O[32],Vertical Crop,Disabled,216p(5x);",
@@ -313,8 +313,8 @@ localparam CONF_STR = {
 	"T[21],Reset to Default;",
 	"T[22],Restart;",
 	"-;",
-	"J1,A,B,Select,Start;",
-	"jn,B,A,Select,Start;",
+	"J1,A,B,X,Y,Select,Start;",
+	"jn,B,A,Y,X,Select,Start;",
 	"V,v",`BUILD_DATE
 };
 
