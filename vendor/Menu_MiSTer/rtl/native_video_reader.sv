@@ -1,6 +1,6 @@
 //============================================================================
 //
-//  Native Video DDR3 Reader (Sonic Mania)
+//  Native Video DDR3 Reader (Sonic Mania) — Phase 9 dual-aspect.
 //
 //  Reads RGB565 pixel data from DDR3 and outputs decoded RGB888 pixels
 //  synchronized to the video timing generator via a dual-clock FIFO.
@@ -12,14 +12,23 @@
 //  4 RGB565 pixels. Beat reception is 1-cycle (no data loss). RGB565-to-
 //  RGB888 decode happens on the read side, extracting 4 pixels per pop.
 //
-//  DDR3 Memory Map (physical addresses):
-//    0x3A000000 + 0x000   : Control word (frame_counter[31:2], active_buffer[1:0])
-//    0x3A000000 + 0x100   : Buffer 0 (320x240 RGB565 = 153,600 bytes = 0x25800)
-//    0x3A000000 + 0x25900 : Buffer 1
+//  DDR3 Memory Map (physical addresses) — aspect-keyed:
+//    0x3A000000 + 0x000     : Control word (frame_counter[31:2], active_buffer[1:0])
+//    0x3A000000 + 0x040     : Vsync feedback word (HPS-side writer)
+//    0x3A000000 + 0x100     : Buffer 0
+//      4:3:  320x240 RGB565 = 153,600 B = 0x25800
+//      16:9: 424x240 RGB565 = 203,520 B = 0x31B00
+//    0x3A000000 + BUF1_OFF  : Buffer 1
+//      4:3:  starts at 0x25900 (BUF0_OFFSET + 0x25800)
+//      16:9: starts at 0x31C00 (BUF0_OFFSET + 0x31B00)
+//
+//  The HPS-side region size is bumped from 0x60000 to 0x80000 in Phase 9 to
+//  fit two 16:9 buffers + control + feedback (see NativeVideoWriter.h).
 //
 //  Clock domains:
 //    Write side: ddr_clk (clk_sys, 100 MHz)
-//    Read side:  clk_vid (CLK_VIDEO, 24.6032 MHz) with ce_pix divide-by-4 (6.1508 MHz)
+//    Read side:  clk_vid (CLK_VIDEO, 27.000 MHz @ 4:3 / 34.828 MHz @ 16:9)
+//                with ce_pix divide-by-4 (6.750 / 8.7069 MHz pixel rate)
 //
 //  Forked from 3S-ARM native_video_reader.sv (384x224, 172,032 B frame).
 //
@@ -42,9 +51,13 @@ module native_video_reader (
     output wire        ddr_we,          // DDRAM_WE (unused, tie to 0)
 
     // Pixel output (clk_vid domain)
-    input  wire        clk_vid,         // video clock (24.6032 MHz, CLK_VIDEO)
-    input  wire        ce_pix,          // pixel enable (divide-by-4, ~6.1508 MHz)
+    input  wire        clk_vid,         // video clock (27/34.828 MHz, aspect-keyed)
+    input  wire        ce_pix,          // pixel enable (divide-by-4)
     input  wire        reset,           // active high reset
+
+    // Phase 9: aspect mode select. 0 = 4:3, 1 = 16:9.
+    // Selects BUF1_ADDR / LINE_BURST / LINE_STRIDE.
+    input  wire        aspect_169,
 
     // Timing inputs (from native_video_timing, clk_vid domain)
     input  wire        de,              // data enable
@@ -71,13 +84,23 @@ assign ddr_we  = 1'b0;
 
 // =========================================================================
 // DDR3 Address Constants (29-bit qword addresses = physical >> 3)
+//
+// Phase 9: BUF1_ADDR / LINE_BURST / LINE_STRIDE are now aspect-keyed wires.
+// CTRL_ADDR and BUF0_ADDR are unchanged (FPGA-side fixed for both modes).
+//
+//   4:3 (320x240): 320 px * 2 B = 640 B/line, 80 beats. Frame = 153,600 B.
+//                  BUF1 phys = 0x3A025900, qword = 0x25900 >> 3 = 0x4B20
+//                  -> BUF1_ADDR = 0x07400000 + 0x4B20 = 0x07404B20.
+//   16:9 (424x240): 424 px * 2 B = 848 B/line, 106 beats. Frame = 203,520 B.
+//                   BUF1 phys = 0x3A031C00, qword = 0x31C00 >> 3 = 0x6380
+//                   -> BUF1_ADDR = 0x07400000 + 0x6380 = 0x07406380.
 // =========================================================================
-localparam [28:0] CTRL_ADDR   = 29'h07400000;  // 0x3A000000 >> 3
-localparam [28:0] BUF0_ADDR   = 29'h07400020;  // 0x3A000100 >> 3
-localparam [28:0] BUF1_ADDR   = 29'h07404B20;  // 0x3A025900 >> 3 (Sonic Mania: 320x240 frame = 0x25800 B)
-localparam [7:0]  LINE_BURST  = 8'd80;         // 640 bytes / 8 = 80 beats (Sonic Mania: 320 px * 2 B/px)
-localparam [28:0] LINE_STRIDE = 29'd80;        // 80 qword addresses per line
-localparam [8:0]  V_ACTIVE    = 9'd240;
+localparam [28:0] CTRL_ADDR   = 29'h07400000;  // 0x3A000000 >> 3 (unchanged)
+localparam [28:0] BUF0_ADDR   = 29'h07400020;  // 0x3A000100 >> 3 (unchanged)
+wire        [28:0] BUF1_ADDR   = aspect_169 ? 29'h07406380 : 29'h07404B20;
+wire        [7:0]  LINE_BURST  = aspect_169 ? 8'd106       : 8'd80;
+wire        [28:0] LINE_STRIDE = aspect_169 ? 29'd106      : 29'd80;
+localparam  [8:0]  V_ACTIVE    = 9'd240;        // unchanged (both aspects 240 lines)
 
 // Deadlock timeout: ~1M cycles at 100 MHz = ~10 ms
 localparam [19:0] TIMEOUT_MAX = 20'hF_FFFF;
@@ -372,8 +395,14 @@ end
 // Dual-Clock FIFO (Altera dcfifo primitive)
 // 64-bit wide: stores raw DDR3 beats (4 RGB565 pixels per entry)
 // Write side: ddr_clk (100 MHz) -- 1 beat per ddr_dout_ready cycle
-// Read side: clk_vid (24.6032 MHz) -- pop 1 entry per 4 ce_pix cycles
-// Depth 256: holds ~3.2 scanlines (80 beats/line * 3.2 = 256) for 320x240 Mania
+// Read side: clk_vid -- pop 1 entry per 4 ce_pix cycles
+//   4:3  mode: clk_vid = 27.000   MHz, 320 px / 4 = 80  beats/line
+//   16:9 mode: clk_vid = 1010/29  MHz, 424 px / 4 = 106 beats/line
+// Depth 256: holds 256/80=3.20 scanlines (4:3) or 256/106=2.41 scanlines (16:9).
+// 3sx baseline ran 384x224 = 96 beats/line = 2.67 lines with the same depth and
+// was field-tested OK; consumer rate (1.7-2.2 MBeats/s) is far below producer
+// burst rate from DDR3 fabric, so the 2.4-line slack covers worst-case bus
+// contention. Bump to lpm_numwords(512) only if hardware test shows underruns.
 // =========================================================================
 wire [63:0] fifo_rd_data;
 wire        fifo_empty;

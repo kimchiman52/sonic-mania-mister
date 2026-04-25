@@ -1835,6 +1835,38 @@ void set_runtime_environment(const StartupScaleModeSelection &startup_scale_mode
 	}
 
 	setenv("LD_LIBRARY_PATH", kRuntimeLibDir, 1);
+
+	// ---- Phase 9: status-bit env-var emission ----
+	//
+	// Status bit map (must match vendor/Menu_MiSTer/menu.sv CONF_STR):
+	//   status[10]    : Mods         (0 = On default, 1 = Off)
+	//   status[12:11] : FPS Overlay  (00 = Off, 01 = Simple, 10 = Detailed)
+	//   status[13]    : Aspect Ratio (0 = 4:3 default, 1 = Widescreen)
+	//
+	// env vars consumed by the engine binary (RSDKv5):
+	//   SONIC_MANIA_MODS         "0" disables ModAPI scan, "1" enables (default)
+	//   SONIC_MANIA_FPS_OVERLAY  "0" off, "1" simple, "2" detailed
+	//   SONIC_MANIA_ASPECT       "43" or "169"
+	{
+		const uint32_t mods_off    = user_io_status_get("[10]");
+		const uint32_t fps_overlay = user_io_status_get("[12:11]");
+		const uint32_t aspect_169  = user_io_status_get("[13]");
+
+		setenv("SONIC_MANIA_MODS",   mods_off ? "0" : "1", 1);
+		setenv("SONIC_MANIA_FPS_OVERLAY",
+		       fps_overlay == 1 ? "1" :
+		       fps_overlay == 2 ? "2" : "0", 1);
+		setenv("SONIC_MANIA_ASPECT", aspect_169 ? "169" : "43", 1);
+
+		// Phase 9 P-2.4: belt-and-suspenders settle delay for the FPGA's
+		// 2-FF aspect_169 synchronizer + hps_io status push before the engine
+		// starts writing DDR3. Cold boot has tens of ms of wrapper overhead
+		// that covers this naturally, but on Restart toggle the gap between
+		// setenv and execve can be milliseconds. 50 ms keeps the toggle
+		// boundary clean. If torn frames at toggle, plan §6 says raise to
+		// 200 ms or extend the FF chain to 3 stages.
+		usleep(50000);
+	}
 }
 
 void split_message_line(const char *start, char *line, size_t line_size)
@@ -1969,13 +2001,17 @@ void poll_status_changes(pid_t child)
 	// Cache previous status bits for change detection.
 	// Initialized to 0xFFFFFFFF so the first poll detects
 	// the seeded values and sends appropriate cycle signals.
-	static uint32_t prev_fps = 0xFFFFFFFF;
-	static uint32_t prev_sa_activation = 0xFFFFFFFF;
-	static uint32_t prev_ghost_res = 0xFFFFFFFF;
-	static uint32_t prev_ghost_count = 0xFFFFFFFF;
-	static uint32_t prev_arm_clock = 0xFFFFFFFF;
-	static uint32_t prev_game_mode = 0xFFFFFFFF;
-	static uint32_t prev_hold_to_pause = 0xFFFFFFFF;
+	//
+	// Phase 9: status bit map updated. 3sx-specific handlers (sa_activation,
+	// ghost_res, ghost_count, arm_clock, game_mode, hold_to_pause) removed.
+	// FPS Overlay moved from status[11:10] to status[12:11]. Aspect Ratio moved
+	// from status[12] to status[13]. The aspect / FPS / mods bits are
+	// communicated to the engine via env vars (SONIC_MANIA_*) at exec time;
+	// runtime polling of these bits has no effect on the running game (the
+	// game would need to re-launch to pick up changes). We still keep change
+	// detection here for future runtime-applied controls.
+	static uint32_t prev_mods         = 0xFFFFFFFF;
+	static uint32_t prev_fps_overlay  = 0xFFFFFFFF;
 	static uint32_t prev_aspect_ratio = 0xFFFFFFFF;
 	static uint32_t prev_h_position = 0xFFFFFFFF;
 	static uint32_t prev_v_position = 0xFFFFFFFF;
@@ -1986,113 +2022,47 @@ void poll_status_changes(pid_t child)
 
 	// --- Option bits: detect changes and apply ---
 
-	uint32_t fps = user_io_status_get("[11:10]");
-	if (fps != prev_fps) {
-		prev_fps = fps;
-		// CONF_STR: 0=Off, 1=FPS, 2=Debug (matches kFpsOverlay* enums)
-		int target = (int)fps;
-		if (target != g_wrapper_fps_mode) {
-			write_runtime_fps_default(target);
-			// FPS signal is a toggle (cycles Off->FPS->Debug->Off).
-			// Compute the number of toggles needed to reach the target.
-			int toggles = (target - g_wrapper_fps_mode + kFpsOverlayModeCount)
-			              % kFpsOverlayModeCount;
-			g_wrapper_fps_mode = target;
-			for (int i = 0; i < toggles; i++)
-				kill(child, kRuntimeFpsToggleSignal);
-		}
+	// Phase 9: Mods (status[10]) — env-var only, applied on next exec.
+	uint32_t mods = user_io_status_get("[10]");
+	if (mods != prev_mods) {
+		prev_mods = mods;
+		// No child signal: the engine reads SONIC_MANIA_MODS on startup.
 	}
 
-	uint32_t sa_activation = user_io_status_get("[14]");
-	if (sa_activation != prev_sa_activation) {
-		prev_sa_activation = sa_activation;
-		// Enum values match CONF_STR option order (0=Full, 1=CachedBg)
-		int target = (int)sa_activation;
-		if (target != g_wrapper_super_effect_quality) {
-			write_runtime_super_effect_quality_default(target);
-			int cycles = (target - g_wrapper_super_effect_quality
-			              + kSuperEffectQualityMenuCount)
-			             % kSuperEffectQualityMenuCount;
-			g_wrapper_super_effect_quality = target;
-			for (int i = 0; i < cycles; i++)
-				kill(child, kRuntimeSuperEffectQualityCycleSignal);
-		}
+	// Phase 9: FPS Overlay moved to status[12:11]. Engine reads
+	// SONIC_MANIA_FPS_OVERLAY on startup; live updates are not wired.
+	uint32_t fps_overlay = user_io_status_get("[12:11]");
+	if (fps_overlay != prev_fps_overlay) {
+		prev_fps_overlay = fps_overlay;
+		// No child signal: env-var only.
 	}
 
-	uint32_t ghost_res = user_io_status_get("[15]");
-	if (ghost_res != prev_ghost_res) {
-		prev_ghost_res = ghost_res;
-		int target = (int)ghost_res;
-		if (target != g_wrapper_ghost_resolution) {
-			write_runtime_ghost_resolution_default(target);
-			int cycles = (target - g_wrapper_ghost_resolution
-			              + kGhostResolutionMenuCount)
-			             % kGhostResolutionMenuCount;
-			g_wrapper_ghost_resolution = target;
-			for (int i = 0; i < cycles; i++)
-				kill(child, kRuntimeGhostResolutionCycleSignal);
-		}
-	}
+	// Phase 9 removed status-bit handlers (3sx-specific options gone with the
+	// new CONF_STR rewrite — see vendor/Menu_MiSTer/menu.sv):
+	//   - SA Activation    (was status[14])
+	//   - SA Ghost Res     (was status[15])
+	//   - SA Ghost Count   (was status[18:16])
+	//   - Overclock        (was status[20:19])
+	//   - Game Mode        (was status[13]; status[13] is now Aspect Ratio)
+	//   - Hold to Pause    (was status[24])
+	//   - Button Check     (was T[23])
+	// The wrapper-side runtime-config writers and signal-cycle helpers for
+	// these are still defined in this TU but no longer driven from this
+	// polling function. They are intentionally left in place to minimise
+	// churn while the build catches up; a follow-up cleanup pass can remove
+	// the unused write_runtime_*/kRuntime*CycleSignal definitions.
 
-	uint32_t ghost_count = user_io_status_get("[18:16]");
-	if (ghost_count != prev_ghost_count) {
-		prev_ghost_count = ghost_count;
-		int target = (int)ghost_count;
-		if (target != g_wrapper_ghost_count) {
-			write_runtime_ghost_count_default(target);
-			int cycles = (target - g_wrapper_ghost_count
-			              + kGhostCountMenuCount)
-			             % kGhostCountMenuCount;
-			g_wrapper_ghost_count = target;
-			for (int i = 0; i < cycles; i++)
-				kill(child, kRuntimeGhostCountCycleSignal);
-		}
-	}
-
-	uint32_t arm_clock = user_io_status_get("[20:19]");
-	if (arm_clock != prev_arm_clock) {
-		prev_arm_clock = arm_clock;
-		int target = (int)arm_clock;
-		if (target != g_wrapper_arm_clock) {
-			write_runtime_arm_clock_default(target);
-			// Overclock defers to restart -- update the pending value only.
-			// g_wrapper_arm_clock_active is applied in the restart loop.
-			g_wrapper_arm_clock = target;
-			// Do NOT send kRuntimeArmClockCycleSignal here.
-		}
-	}
-
-	uint32_t game_mode = user_io_status_get("[13]");
-	if (game_mode != prev_game_mode) {
-		prev_game_mode = game_mode;
-		int target = (int)game_mode;
-		if (target != g_wrapper_game_mode) {
-			write_runtime_game_mode_default(target);
-			g_wrapper_game_mode = target;
-			kill(child, kRuntimeGameModeCycleSignal);
-		}
-	}
-
-	uint32_t hold_to_pause = user_io_status_get("[24]");
-	if (hold_to_pause != prev_hold_to_pause) {
-		prev_hold_to_pause = hold_to_pause;
-		int target = (int)hold_to_pause;
-		if (target != g_wrapper_hold_to_pause) {
-			write_runtime_hold_to_pause_default(target);
-			g_wrapper_hold_to_pause = target;
-			kill(child, kRuntimeHoldToPauseCycleSignal);
-		}
-	}
-
-	uint32_t aspect_ratio = user_io_status_get("[12]");
+	// Phase 9: Aspect Ratio moved to status[13]. Engine reads
+	// SONIC_MANIA_ASPECT on startup; runtime poll just tracks UI state.
+	uint32_t aspect_ratio = user_io_status_get("[13]");
 	if (aspect_ratio != prev_aspect_ratio) {
 		prev_aspect_ratio = aspect_ratio;
 		int target = (int)aspect_ratio;
 		if (target != g_wrapper_aspect_ratio) {
 			write_runtime_aspect_ratio_default(target);
 			g_wrapper_aspect_ratio = target;
-			// No child signal: aspect ratio is pure FPGA/scaler state,
-			// the game does not read this setting.
+			// No child signal: aspect ratio is pure FPGA/clock-mux state.
+			// Engine picks it up on next exec via SONIC_MANIA_ASPECT.
 		}
 	}
 
@@ -2169,35 +2139,25 @@ void poll_status_changes(pid_t child)
 	uint32_t triggers = user_io_status_trigger_take();
 
 	if (triggers & (1u << 21)) {
-		// Reset to Default
-		user_io_status_set("[11:10]", 0); // FPS off
-		user_io_status_set("[14]", kSuperEffectQualityCachedBg); // SA default=CachedBg
-		user_io_status_set("[15]", 0);    // Ghost Res = Full (enum 0)
-		user_io_status_set("[18:16]", kGhostCount4); // Ghost Count default=4
-		user_io_status_set("[20:19]", 0); // Overclock = Stock
-		user_io_status_set("[12]", 0);    // Aspect Ratio = 4:3
-		user_io_status_set("[13]", 0);    // Game Mode = Console
-		user_io_status_set("[24]", 0);    // Hold to Pause = Off
+		// Reset to Default — Phase 9 bit map.
+		user_io_status_set("[10]", 0);    // Mods = On (default)
+		user_io_status_set("[12:11]", 0); // FPS Overlay = Off
+		user_io_status_set("[13]", 0);    // Aspect Ratio = 4:3
 		user_io_status_set("[28:25]", 0); // H Position = 0
 		user_io_status_set("[46:43]", 0); // V Position = 0
 		user_io_status_set("[32]", 0);    // Vertical Crop = Disabled
 		user_io_status_set("[36:33]", 0); // Crop Offset = 0
 		user_io_status_set("[38:37]", 0); // Scale = Normal
 		user_io_status_set("[42:39]", 0); // H Size = 0
-		prev_fps = 0xFFFFFFFF;
-		prev_sa_activation = 0xFFFFFFFF;
-		prev_ghost_res = 0xFFFFFFFF;
-		prev_ghost_count = 0xFFFFFFFF;
-		prev_arm_clock = 0xFFFFFFFF;
-		prev_game_mode = 0xFFFFFFFF;
-		prev_hold_to_pause = 0xFFFFFFFF;
-		prev_aspect_ratio = 0xFFFFFFFF;
-		prev_h_position = 0xFFFFFFFF;
-		prev_v_position = 0xFFFFFFFF;
+		prev_mods          = 0xFFFFFFFF;
+		prev_fps_overlay   = 0xFFFFFFFF;
+		prev_aspect_ratio  = 0xFFFFFFFF;
+		prev_h_position    = 0xFFFFFFFF;
+		prev_v_position    = 0xFFFFFFFF;
 		prev_vertical_crop = 0xFFFFFFFF;
-		prev_crop_offset = 0xFFFFFFFF;
-		prev_scale = 0xFFFFFFFF;
-		prev_h_size = 0xFFFFFFFF;
+		prev_crop_offset   = 0xFFFFFFFF;
+		prev_scale         = 0xFFFFFFFF;
+		prev_h_size        = 0xFFFFFFFF;
 	}
 
 	if (triggers & (1u << 22)) {
@@ -2692,16 +2652,22 @@ int sonicmania_wrapper_run(int argc, char *argv[])
 	// Seed CONF_STR status bits from persisted game config so the MiSTer
 	// menu reflects the actual runtime settings. This overwrites any values
 	// loaded from Sonic Mania.CFG by user_io_init -- the game config is authoritative.
+	//
+	// Phase 9 bit map (3sx-specific bits removed; see vendor/Menu_MiSTer/menu.sv):
+	//   - status[10]    : Mods (default On=0; persisted state is in g_wrapper_mods,
+	//                     not yet promoted from g_wrapper_* — defaults to On until
+	//                     a follow-up adds persistence).
+	//   - status[12:11] : FPS Overlay (re-uses g_wrapper_fps_mode value range 0..2)
+	//   - status[13]    : Aspect Ratio (g_wrapper_aspect_ratio: 0=4:3, 1=Widescreen)
+	//   - status[28:25], [32], [36:33], [38:37], [42:39], [46:43]: HDMI scaler
+	//     adjustments — unchanged from baseline.
 	if (g_wrapper_used_full_user_io_init)
 	{
-		user_io_status_set("[11:10]", (uint32_t)g_wrapper_fps_mode);
-		user_io_status_set("[14]", (uint32_t)g_wrapper_super_effect_quality);
-		user_io_status_set("[15]", (uint32_t)g_wrapper_ghost_resolution);
-		user_io_status_set("[18:16]", (uint32_t)g_wrapper_ghost_count);
-		user_io_status_set("[20:19]", (uint32_t)g_wrapper_arm_clock);
-		user_io_status_set("[12]", (uint32_t)g_wrapper_aspect_ratio);
-		user_io_status_set("[13]", (uint32_t)g_wrapper_game_mode);
-		user_io_status_set("[24]", (uint32_t)g_wrapper_hold_to_pause);
+		// Mods defaults to On (0). No persistence yet; the env-var emission in
+		// set_runtime_environment() is the authoritative read on launch.
+		user_io_status_set("[10]", 0);
+		user_io_status_set("[12:11]", (uint32_t)g_wrapper_fps_mode);
+		user_io_status_set("[13]", (uint32_t)g_wrapper_aspect_ratio);
 		user_io_status_set("[28:25]", (uint32_t)g_wrapper_h_position);
 		user_io_status_set("[46:43]", (uint32_t)g_wrapper_v_position);
 		user_io_status_set("[32]", (uint32_t)g_wrapper_vertical_crop);
@@ -2806,6 +2772,25 @@ int sonicmania_wrapper_run(int argc, char *argv[])
 		               startup_scale_mode.vga_mode_int);
 
 		set_runtime_environment(startup_scale_mode);
+
+		// Phase 9: log the resolved status-bit env vars so on-device verification
+		// (step 6.2/6.3 in the plan) can grep wrapper.log for the 4:3 vs 16:9 boot
+		// signal. Reads back via getenv after set_runtime_environment so this stays
+		// in sync with whatever the function actually emitted.
+		{
+			const char *mods_env    = getenv("SONIC_MANIA_MODS");
+			const char *fps_env     = getenv("SONIC_MANIA_FPS_OVERLAY");
+			const char *aspect_env  = getenv("SONIC_MANIA_ASPECT");
+			const uint32_t mods_off    = user_io_status_get("[10]");
+			const uint32_t fps_overlay = user_io_status_get("[12:11]");
+			const uint32_t aspect_169  = user_io_status_get("[13]");
+			write_log_line(wrapper_log,
+			               "phase9: SONIC_MANIA_MODS=%s SONIC_MANIA_FPS_OVERLAY=%s SONIC_MANIA_ASPECT=%s (mods_off=%u fps=%u aspect_169=%u)",
+			               mods_env    ? mods_env    : "(unset)",
+			               fps_env     ? fps_env     : "(unset)",
+			               aspect_env  ? aspect_env  : "(unset)",
+			               mods_off, fps_overlay, aspect_169);
+		}
 
 		int last_run_fd = open(kLastRunLogPath, O_WRONLY | O_CREAT | O_TRUNC | O_APPEND | O_CLOEXEC, 0644);
 		if (last_run_fd < 0)
@@ -3020,15 +3005,11 @@ int sonicmania_wrapper_run(int argc, char *argv[])
 			g_wrapper_restart_requested = 0;
 			g_wrapper_arm_clock_active = g_wrapper_arm_clock;
 
-			// Re-seed status bits so the menu reflects current values after restart
-			user_io_status_set("[11:10]", (uint32_t)g_wrapper_fps_mode);
-			user_io_status_set("[14]", (uint32_t)g_wrapper_super_effect_quality);
-			user_io_status_set("[15]", (uint32_t)g_wrapper_ghost_resolution);
-			user_io_status_set("[18:16]", (uint32_t)g_wrapper_ghost_count);
-			user_io_status_set("[20:19]", (uint32_t)g_wrapper_arm_clock);
-			user_io_status_set("[12]", (uint32_t)g_wrapper_aspect_ratio);
-			user_io_status_set("[13]", (uint32_t)g_wrapper_game_mode);
-			user_io_status_set("[24]", (uint32_t)g_wrapper_hold_to_pause);
+			// Re-seed status bits so the menu reflects current values after restart.
+			// Phase 9 bit map (3sx-specific bits removed).
+			user_io_status_set("[10]", 0); // Mods default On (no persistence yet)
+			user_io_status_set("[12:11]", (uint32_t)g_wrapper_fps_mode);
+			user_io_status_set("[13]", (uint32_t)g_wrapper_aspect_ratio);
 			user_io_status_set("[28:25]", (uint32_t)g_wrapper_h_position);
 			user_io_status_set("[46:43]", (uint32_t)g_wrapper_v_position);
 			user_io_status_set("[32]", (uint32_t)g_wrapper_vertical_crop);

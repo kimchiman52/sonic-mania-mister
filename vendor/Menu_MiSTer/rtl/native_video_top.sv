@@ -1,10 +1,15 @@
 //============================================================================
 //
-//  Native Video Top-Level Wrapper (Sonic Mania)
+//  Native Video Top-Level Wrapper (Sonic Mania) — Phase 9 dual-aspect.
 //
 //  Instantiates the timing generator and DDR3 reader, providing a clean
-//  interface to menu.sv. Runs on CLK_VIDEO (24.6032 MHz) with integer
-//  divide-by-4 ce_pix for 6.1508 MHz effective pixel rate.
+//  interface to menu.sv. Runs on CLK_VIDEO (27.000 MHz @ 4:3 / 34.828 MHz
+//  @ 16:9 — selected by glitch-free clock mux in menu.sv) with integer
+//  divide-by-4 ce_pix for 6.750 / 8.7069 MHz pixel rate respectively.
+//
+//  The `aspect_169` input flows from menu.sv `wire aspect_169 = status[13];`
+//  down through to both the timing generator (H/V totals) and the reader
+//  (BUF1_ADDR / LINE_BURST / LINE_STRIDE).
 //
 //  Forked from 3S-ARM native_video_top.sv.
 //
@@ -15,9 +20,12 @@
 
 module native_video_top (
     input  wire        clk_sys,          // system clock (100 MHz) for DDR3
-    input  wire        clk_vid,          // video clock (24.6032 MHz, CLK_VIDEO)
-    input  wire        ce_pix,           // pixel enable (divide-by-4, ~6.1508 MHz)
+    input  wire        clk_vid,          // video clock (27/34.828 MHz, CLK_VIDEO, aspect-keyed)
+    input  wire        ce_pix,           // pixel enable (divide-by-4)
     input  wire        reset,
+
+    // Phase 9: aspect-ratio mode select. 0 = 4:3, 1 = 16:9.
+    input  wire        aspect_169,
 
     // OSD position offsets (two's complement, passed to timing generator)
     input  wire signed [3:0] h_offset,   // -8 to +7 pixels
@@ -66,12 +74,14 @@ wire        tim_new_frame;
 wire        tim_new_line;
 
 native_video_timing timing (
-    .clk       (clk_vid),
-    .ce_pix    (ce_pix),
-    .reset     (reset),
+    .clk        (clk_vid),
+    .ce_pix     (ce_pix),
+    .reset      (reset),
 
-    .h_offset  (h_offset),
-    .v_offset  (v_offset),
+    .aspect_169 (aspect_169),
+
+    .h_offset   (h_offset),
+    .v_offset   (v_offset),
 
     .hsync     (tim_hsync),
     .vsync     (tim_vsync),
@@ -109,6 +119,9 @@ native_video_reader reader (
     .clk_vid        (clk_vid),
     .ce_pix         (ce_pix),
     .reset          (reset),
+
+    // Phase 9: aspect-keyed buffer addressing
+    .aspect_169     (aspect_169),
 
     // Timing signals
     .de             (tim_de),

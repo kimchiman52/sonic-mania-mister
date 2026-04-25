@@ -1,28 +1,28 @@
-// Sonic Mania pll_video instance — 4:3 NTSC-exact mode.
+// Sonic Mania pll_video_169 instance — 16:9 widescreen mode.
 //
-// Phase 9 retarget: CLK_VIDEO = 27.000000 MHz exact. Pixel clock at DAC =
-// CLK_VIDEO / 4 = 6.750000 MHz. Paired with native_video_timing.sv 4:3
-// H_TOTAL=429, V_TOTAL=262 yields refresh = 60.07 Hz, H-freq = 15,734 Hz
-// (NTSC-exact).
+// Phase 9 target: CLK_VIDEO = 1010/29 MHz = 34.827586 MHz exact rational.
+// Pixel clock at DAC = CLK_VIDEO / 4 = 8.706897 MHz. Paired with
+// native_video_timing.sv 16:9 H_TOTAL=545, V_TOTAL=266 yields refresh =
+// 60.06 Hz, H-freq = 15,976 Hz.
 //
-// Expected fit: M=81, N=5, C=30 (VCO 810 MHz, /30 = 27.000 MHz exact).
+// Expected fit: M=101, N=5, C=29 (VCO 1010 MHz, /29 = 34.827586 MHz).
 // Verify in fitter log post-compile.
 //
-// The `operation_mode("direct")` string below is inherited verbatim from the
-// 3S-ARM shipping config. It is a cosmetic no-op when altera_pll is driven by
-// an explicit `output_clock_frequency0` string -- Quartus's fitter picks the
-// best M/N/C rational fraction regardless of the "direct" label. Do NOT
-// hand-change this field; let Quartus regenerate it via the MegaWizard if a
-// cleaner IP is desired.
+// FALLBACK (auto-trigger if M=101 fit fails per phase-9-plan.md §1
+// "Failure mode + recovery"):
+//   .output_clock_frequency0("35.600000 MHz")  -- M=89/N=5/C=25, VCO 890 MHz.
+//   Then: H_TOTAL=555, V_TOTAL=267, H_FP=23, H_BP=76, V_FP=10, V_BP=14 in
+//   native_video_timing.sv; video.cpp ternary literal becomes 1780.0/50.0.
+//
+// The `operation_mode("direct")` string below mirrors pll_video_0002.v. It is
+// a cosmetic no-op when altera_pll is driven by an explicit
+// `output_clock_frequency0` string. Quartus's fitter picks the best M/N/C
+// rational fraction.
 //
 // Integer-N discipline: `fractional_vco_multiplier("false")` prevents
-// delta-sigma jitter on the pixel clock (see reference-native-analog-video.md
-// §4 "Why Not Fractional-N PLL"). Keep false.
-//
-// Phase history: 3S-ARM was 31.153846 MHz; Sonic Mania Phase 4 was
-// 24.603175 MHz (M=62/N=3/C=42, 50*62/3/42); Phase 9 is 27.000000 MHz exact.
+// delta-sigma jitter on the pixel clock. Keep false.
 `timescale 1ns/10ps
-module  pll_video_0002(
+module  pll_video_169_0002(
 
 	// interface 'refclk'
 	input wire refclk,
@@ -42,8 +42,10 @@ module  pll_video_0002(
 		.reference_clock_frequency("50.0 MHz"),
 		.operation_mode("direct"),
 		.number_of_clocks(1),
-		// Phase 9: 27.000 MHz exact (M=81/N=5/C=30, VCO 810 MHz). Verify M/N/C in fitter log.
-		.output_clock_frequency0("27.000000 MHz"),
+		// Phase 9: 34.827586 MHz (1010/29, M=101/N=5/C=29, VCO 1010 MHz).
+		// If fitter rejects M=101, change to "35.600000 MHz" (M=89/N=5/C=25)
+		// per fallback path documented above.
+		.output_clock_frequency0("34.827586 MHz"),
 		.phase_shift0("0 ps"),
 		.duty_cycle0(50),
 		.output_clock_frequency1("0 MHz"),

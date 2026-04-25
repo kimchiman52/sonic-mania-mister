@@ -3,3 +3,4 @@ set_global_assignment -name QIP_FILE           [file join $::quartus(qip_path) p
 set_global_assignment -name QIP_FILE           [file join $::quartus(qip_path) pll_audio.qip ]
 set_global_assignment -name QIP_FILE           [file join $::quartus(qip_path) pll_cfg.qip ]
 set_global_assignment -name QIP_FILE           rtl/pll_video.qip
+set_global_assignment -name QIP_FILE           rtl/pll_video_169.qip
