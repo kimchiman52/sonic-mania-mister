@@ -367,6 +367,12 @@ Step 5 (creates `docs/mister-settings.md`), Step 2 (creates `docs/mister-wrapper
 
 ## Step 7 — Cutscene + image-texture unstub (optional, ~120 LOC)
 
+**STATUS: SHIPPED — hardware sign-off pending.** See
+`docs/phase-7-step-7-plan.md` for the implemented design and edits;
+landed in submodule commit `ffa9330` / parent `ddfd97f1`. Mac-host
+build green; live-hardware playback test of attract-mode `Mania.ogv`
+remains as the user-driven follow-up.
+
 ### Why it matters
 Mania's attract mode plays a short libtheora cutscene on the title loop. Today `SetupVideoTexture_YUV{420,422,444}` AND `SetupImageTexture` are explicit stubs (`MiSTerRenderDevice.cpp:167-215`). Mania still boots fine without it — the title screen appears — but the attract loop is silent/black where the video should play, and `SHADER_RGB_IMAGE` (title cards, transition images per `mister-port-research.md` §2.7) renders as garbage/nothing. Mid-game cutscenes (e.g., Titanic Monarch intro) fail the same way. This is cosmetic; decision D5 lets us defer. We revisit because Phase 0 already ships cairo-free libtheora bundled, so the dep is free.
 

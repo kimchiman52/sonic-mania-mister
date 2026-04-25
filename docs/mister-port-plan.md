@@ -14,7 +14,7 @@
 | 2 | FPGA core relationship to 3sx | **Separate core**, heavily derived from `3S-ARM`. Fork, rename, reparameterize modeline. |
 | 3 | RSDKv5 platform identity | **Treat as `RETRO_LINUX`.** Our backend is selected via a separate `RETRO_RENDERDEVICE_MISTER` flag. Zero upstream patches to `RetroEngine.hpp`'s platform detection chain. |
 | 4 | Game binary shape | **`GAME_STATIC=ON`.** Single executable, no runtime `libGame.so`. |
-| 5 | Cutscenes (libtheora YUV→RGB) | **Stub `LoadVideo`/`ProcessVideo` for now.** Revisit in a later phase if the libtheora armhf build is clean. |
+| 5 | Cutscenes (libtheora YUV→RGB) | ~~Stub `LoadVideo`/`ProcessVideo` for now.~~ **Resolved in Phase 7 Step 7** (`docs/phase-7-step-7-plan.md`): real CPU YUV→RGB565 + RGBA→RGB565 in `MiSTerRenderDevice.cpp`. Mac-host build shipped; live-hardware playback test pending. |
 | 6 | Remote repo | **Local-only for now.** Directory name is `~/Developer/sonic-mania-mister`. No GitHub push until it works. |
 | 7 | Core filename | **`Sonic Mania.rbf`** (with space) preferred; `SonicMania.rbf` acceptable fallback if the build system fights the space. |
 | 8 | Build flavor strategy | **Mirror 3sx's `telemetry` / `clean` split.** Always build `telemetry` during dev (per feedback memory). |

@@ -166,15 +166,21 @@ sections in `saves/`. Zero LOC needed; documentation-only added in
 `docs/mister-settings.md` "Input Rebinding" section. SDL2-level override
 hatch (`gamecontrollerdb.txt` in `saves/`) also documented.
 
-**Step 7** (YUV + ImageTexture unstub): **DEFERRED**. Cutscenes are
-attract-mode + inter-zone only and land black with audio currently. The
-~120-LOC CPU YUV→RGB565 + RGBA→RGB565 implementation is straightforward
-in isolation but is gated on a live cutscene playback test on real
-hardware (color calibration, frame-rate budget, BT.601 vs. BT.709
-debugging). Per phase-7-plan.md decision D5, deferring until Phase 0–6
-gameplay smoke + Phase 6 perf measurement clear. Stubs at
-`MiSTerRenderDevice.cpp:167–215` retain their explanatory comment block
-intact for the future revisit.
+**Step 7** (YUV + ImageTexture unstub): **SHIPPED — hardware sign-off
+pending**. CPU pixel conversion landed in
+`dependencies/RSDKv5/RSDKv5/RSDK/Graphics/MiSTer/MiSTerRenderDevice.cpp`
+(244 added / 37 removed): three `static inline` helpers (`pack_rgb565`,
+`yuv601_to_rgb565`, `compute_dest_rect`) plus real bodies for
+`SetupImageTexture` (RGBA8888 → RGB565, center-crop/letterbox + one-shot
+dim multiply) and `SetupVideoTexture_YUV{420,422,444}` (BT.601
+limited-range YUV → RGB565 with chroma upsample done in CPU). Mac-host
+`PORT_MISTER=ON` build is green. Live-hardware test (idle 13s on title
+screen → attract-mode `Mania.ogv`; gating bar ≥ 55 fps, hard floor 30
+fps; no `[stub]` lines in `log.txt` from these four functions) is the
+remaining sign-off — runs separately on a DE10-Nano with `Data.rsdk`
+present. Implementation plan at `docs/phase-7-step-7-plan.md`. Known
+scope cut: title cards appear instantly (no fade-in), since fade-in
+requires a re-blit hook the shader-less backend doesn't have.
 
 **Step 8** (wrapper SHM input via `SONIC_MANIA_JOY_SHM`): **DEFERRED to
 Phase 4 territory**. The hook point already exists at
