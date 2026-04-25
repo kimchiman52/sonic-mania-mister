@@ -3412,14 +3412,23 @@ void video_fb_enable(int enable, int n)
 				}
 				else
 				{
-					input_switch(1);
+					// MiSTer Sonic Mania port fix: standard MiSTer cores read
+					// joystick state via FPGA-mapped SPI (UIO_BUT_SW). They
+					// want exclusive /dev/input grab here so the wrapper
+					// captures input for menu nav and SPI-injects to core.
+					// Our core runs an SDL2 binary in HPS userland that
+					// reads /dev/input directly — exclusive grab starves it.
+					// Force release here. Bug repro: open OSD, close OSD,
+					// in-game controls dead. Fix: don't grab on fb mode
+					// switch; engine retains direct input access throughout.
+					input_switch(0);
 				}
 			}
 			else
 			{
 				printf("Switch to core frame buffer\n");
 				spi_w(0); // enable flag
-				input_switch(1);
+				input_switch(0); // (Sonic Mania port: never grab — see comment above)
 			}
 
 			fb_enabled = enable;
@@ -3427,7 +3436,7 @@ void video_fb_enable(int enable, int n)
 		else
 		{
 			printf("Core doesn't support HPS frame buffer\n");
-			input_switch(1);
+			input_switch(0); // (Sonic Mania port: never grab — see comment above)
 		}
 
 		DisableIO();
