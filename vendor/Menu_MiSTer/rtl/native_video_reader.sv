@@ -77,18 +77,21 @@ assign ddr_we  = 1'b0;
 // =========================================================================
 // DDR3 Address Constants (29-bit qword addresses = physical >> 3)
 //
-// Phase 9 scope cut: 4:3 only. 16:9 deferred to Phase 10 (altpll_reconfig).
+// Phase 10 dual-RBF: 4:3 here (320x224); 16:9 (424x224) is patched in by
+// tools/mister-wrapper/build-core.sh --aspect 16:9.
+// Phase 10b: V_ACTIVE was 240, retuned to 224 to match standard NTSC 240p
+// console convention so the CRT renders at the same height as Genesis/SNES.
 //
-//   4:3 (320x240): 320 px * 2 B = 640 B/line, 80 beats. Frame = 153,600 B.
-//                  BUF1 phys = 0x3A025900, qword = 0x25900 >> 3 = 0x4B20
-//                  -> BUF1_ADDR = 0x07400000 + 0x4B20 = 0x07404B20.
+//   4:3 (320x224): 320 px * 2 B = 640 B/line, 80 beats. Frame = 143,360 B.
+//                  BUF1 phys = 0x3A023100, qword = 0x23100 >> 3 = 0x4620
+//                  -> BUF1_ADDR = 0x07400000 + 0x4620 = 0x07404620.
 // =========================================================================
 localparam [28:0] CTRL_ADDR   = 29'h07400000;  // 0x3A000000 >> 3
 localparam [28:0] BUF0_ADDR   = 29'h07400020;  // 0x3A000100 >> 3
-localparam [28:0] BUF1_ADDR   = 29'h07404B20;  // 0x3A025900 >> 3
+localparam [28:0] BUF1_ADDR   = 29'h07404620;  // 0x3A023100 >> 3
 localparam [7:0]  LINE_BURST  = 8'd80;
 localparam [28:0] LINE_STRIDE = 29'd80;
-localparam [8:0]  V_ACTIVE    = 9'd240;
+localparam [8:0]  V_ACTIVE    = 9'd224;
 
 // Deadlock timeout: ~1M cycles at 100 MHz = ~10 ms
 localparam [19:0] TIMEOUT_MAX = 20'hF_FFFF;

@@ -294,13 +294,16 @@ File.write(pll_path, pll)
 
 # ---- 2. Modeline totals + porches ----------------------------------------
 timing = File.read(timing_path)
+# Phase 10b: V_ACTIVE pinned at 224 in both aspects (matches NTSC 240p
+# console convention, set in 4:3 source). 16:9 V_TOTAL=266 leaves
+# 39 lines of vertical porch; distribute V_FP=11 / V_BP=28 (NTSC-typical).
 {
   "H_ACTIVE = 10\x27d320" => "H_ACTIVE = 10\x27d424",
   "H_FP     = 10\x27d26"  => "H_FP     = 10\x27d26",   # noop, retained for tuning
   "H_BP     = 10\x27d51"  => "H_BP     = 10\x27d63",
   "H_TOTAL  = 10\x27d429" => "H_TOTAL  = 10\x27d545",
-  "V_FP     = 9\x27d2"    => "V_FP     = 9\x27d4",
-  "V_BP     = 9\x27d17"   => "V_BP     = 9\x27d19",
+  "V_FP     = 9\x27d10"   => "V_FP     = 9\x27d11",
+  "V_BP     = 9\x27d25"   => "V_BP     = 9\x27d28",
   "V_TOTAL  = 9\x27d262"  => "V_TOTAL  = 9\x27d266",
 }.each do |from, to|
   next if from == to
@@ -312,9 +315,12 @@ File.write(timing_path, timing)
 
 # ---- 3. DDR3 reader buffer/burst/stride ----------------------------------
 reader = File.read(reader_path)
+# Phase 10b 224p: 4:3 BUF1_ADDR is now 0x07404620 (320*224*2 + 0x100, qword
+# offset). 16:9 frame_bytes = 424*224*2 = 0x2E600; BUF1 byte = 0x100+0x2E600
+# = 0x2E700; qword = >>3 = 0x5CE0; BUF1_ADDR = 0x07400000 + 0x5CE0 = 0x07405CE0.
 {
-  "localparam [28:0] BUF1_ADDR   = 29\x27h07404B20;  // 0x3A025900 >> 3" =>
-    "localparam [28:0] BUF1_ADDR   = 29\x27h07406380;  // 0x3A031C00 >> 3 (424*240*2 + 0x100)",
+  "localparam [28:0] BUF1_ADDR   = 29\x27h07404620;  // 0x3A023100 >> 3" =>
+    "localparam [28:0] BUF1_ADDR   = 29\x27h07405CE0;  // 0x3A02E700 >> 3 (424*224*2 + 0x100)",
   "localparam [7:0]  LINE_BURST  = 8\x27d80"  =>
     "localparam [7:0]  LINE_BURST  = 8\x27d106",
   "localparam [28:0] LINE_STRIDE = 29\x27d80" =>

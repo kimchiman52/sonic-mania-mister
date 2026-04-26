@@ -194,58 +194,58 @@ void TitleCard_SetupVertices(void)
     self->zoneDecorVerts[3].y = TO_FIXED(162);
 
     self->stripVertsBlue[0].x = self->stripPos[0];
-    self->stripVertsBlue[0].y = TO_FIXED(240);
+    self->stripVertsBlue[0].y = TO_FIXED(SCREEN_YSIZE);
     self->stripVertsBlue[1].x = TO_FIXED(64) + self->stripVertsBlue[0].x;
-    self->stripVertsBlue[1].y = TO_FIXED(240);
+    self->stripVertsBlue[1].y = TO_FIXED(SCREEN_YSIZE);
     self->stripVertsBlue[2].x = TO_FIXED(304) + self->stripVertsBlue[0].x;
-    self->stripVertsBlue[2].y = TO_FIXED(240);
+    self->stripVertsBlue[2].y = TO_FIXED(SCREEN_YSIZE);
     self->stripVertsBlue[3].x = TO_FIXED(240) + self->stripVertsBlue[0].x;
-    self->stripVertsBlue[3].y = TO_FIXED(240);
+    self->stripVertsBlue[3].y = TO_FIXED(SCREEN_YSIZE);
 
     self->stripVertsRed[0].x = self->stripPos[1];
-    self->stripVertsRed[0].y = TO_FIXED(240);
+    self->stripVertsRed[0].y = TO_FIXED(SCREEN_YSIZE);
     self->stripVertsRed[1].x = TO_FIXED(128) + self->stripVertsRed[0].x;
-    self->stripVertsRed[1].y = TO_FIXED(240);
+    self->stripVertsRed[1].y = TO_FIXED(SCREEN_YSIZE);
     self->stripVertsRed[2].x = TO_FIXED(230) + self->stripVertsRed[0].x;
-    self->stripVertsRed[2].y = TO_FIXED(240);
+    self->stripVertsRed[2].y = TO_FIXED(SCREEN_YSIZE);
     self->stripVertsRed[3].x = TO_FIXED(102) + self->stripVertsRed[0].x;
-    self->stripVertsRed[3].y = TO_FIXED(240);
+    self->stripVertsRed[3].y = TO_FIXED(SCREEN_YSIZE);
 
     self->stripVertsOrange[0].x = self->stripPos[2];
-    self->stripVertsOrange[0].y = TO_FIXED(240);
+    self->stripVertsOrange[0].y = TO_FIXED(SCREEN_YSIZE);
     self->stripVertsOrange[1].x = TO_FIXED(240) + self->stripVertsOrange[0].x;
-    self->stripVertsOrange[1].y = TO_FIXED(240);
+    self->stripVertsOrange[1].y = TO_FIXED(SCREEN_YSIZE);
     self->stripVertsOrange[2].x = TO_FIXED(262) + self->stripVertsOrange[0].x;
-    self->stripVertsOrange[2].y = TO_FIXED(240);
+    self->stripVertsOrange[2].y = TO_FIXED(SCREEN_YSIZE);
     self->stripVertsOrange[3].x = TO_FIXED(166) + self->stripVertsOrange[0].x;
-    self->stripVertsOrange[3].y = TO_FIXED(240);
+    self->stripVertsOrange[3].y = TO_FIXED(SCREEN_YSIZE);
 
     self->stripVertsGreen[0].x = self->stripPos[3];
-    self->stripVertsGreen[0].y = TO_FIXED(240);
+    self->stripVertsGreen[0].y = TO_FIXED(SCREEN_YSIZE);
     self->stripVertsGreen[1].x = TO_FIXED(32) + self->stripVertsGreen[0].x;
-    self->stripVertsGreen[1].y = TO_FIXED(240);
+    self->stripVertsGreen[1].y = TO_FIXED(SCREEN_YSIZE);
     self->stripVertsGreen[2].x = TO_FIXED(160) + self->stripVertsGreen[0].x;
-    self->stripVertsGreen[2].y = TO_FIXED(240);
+    self->stripVertsGreen[2].y = TO_FIXED(SCREEN_YSIZE);
     self->stripVertsGreen[3].x = TO_FIXED(128) + self->stripVertsGreen[0].x;
-    self->stripVertsGreen[3].y = TO_FIXED(240);
+    self->stripVertsGreen[3].y = TO_FIXED(SCREEN_YSIZE);
 
     self->bgLCurtainVerts[0].x = TO_FIXED(0);
     self->bgLCurtainVerts[0].y = TO_FIXED(0);
     self->bgLCurtainVerts[1].x = (self->stripVertsBlue[1].x + self->stripVertsBlue[0].x) >> 1;
     self->bgLCurtainVerts[1].y = TO_FIXED(0);
     self->bgLCurtainVerts[2].x = (self->stripVertsBlue[3].x + self->stripVertsBlue[2].x) >> 1;
-    self->bgLCurtainVerts[2].y = TO_FIXED(240);
+    self->bgLCurtainVerts[2].y = TO_FIXED(SCREEN_YSIZE);
     self->bgLCurtainVerts[3].x = TO_FIXED(0);
-    self->bgLCurtainVerts[3].y = TO_FIXED(240);
+    self->bgLCurtainVerts[3].y = TO_FIXED(SCREEN_YSIZE);
 
     self->bgRCurtainVerts[0].x = (self->stripVertsBlue[1].x + self->stripVertsBlue[0].x) >> 1;
     self->bgRCurtainVerts[0].y = TO_FIXED(0);
     self->bgRCurtainVerts[1].x = TO_FIXED(ScreenInfo->size.x);
     self->bgRCurtainVerts[1].y = TO_FIXED(0);
     self->bgRCurtainVerts[2].x = TO_FIXED(ScreenInfo->size.x);
-    self->bgRCurtainVerts[2].y = TO_FIXED(240);
+    self->bgRCurtainVerts[2].y = TO_FIXED(SCREEN_YSIZE);
     self->bgRCurtainVerts[3].x = (self->stripVertsBlue[3].x + self->stripVertsBlue[2].x) >> 1;
-    self->bgRCurtainVerts[3].y = TO_FIXED(240);
+    self->bgRCurtainVerts[3].y = TO_FIXED(SCREEN_YSIZE);
 }
 
 void TitleCard_SetupTitleWords(void)

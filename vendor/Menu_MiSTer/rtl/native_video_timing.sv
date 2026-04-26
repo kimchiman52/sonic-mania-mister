@@ -52,34 +52,31 @@ module native_video_timing (
 //
 // 4:3 modeline rationale:
 //   H 320 active + 26 FP + 32 sync + 51 BP = 429 total
-//   V 240 active +  2 FP +  3 sync + 17 BP = 262 total
+//   V 224 active + 10 FP +  3 sync + 25 BP = 262 total
 //   refresh = 6,750,000 / (429*262) = 60.07 Hz
 //   H_freq  = 6,750,000 / 429       = 15,734 Hz (NTSC-exact)
 //
-// Porch distribution evolution:
-//   - Initial Phase 9: H_FP=14, H_BP=63 → 1" black bar on left (image far right)
-//   - Phase 9b first centering pass: H_FP=39, H_BP=38 → user reported image far left
-//   - Phase 9c (this file): H_FP=26, H_BP=51 → split-difference, image roughly centered
-//     while keeping H_BP above NTSC's 5.7 µs minimum (51 cycles ≈ 7.56 µs).
-// Vertical: V_FP=2, V_BP=17 (was 6/13). Shifts image ~4 lines down per user
-// request. V_FP=2 is tighter than NTSC's nominal 3 lines but well within what
-// every NTSC-compliant CRT phase-locks to.
+// Phase 10b retune: V_ACTIVE 240 → 224 to match standard NTSC 240p console
+// convention (Genesis/SNES). Engine now compiles with -DSCREEN_YSIZE=224 so
+// the rendered frame is 320×224. CRT shows the same vertical extent as
+// other retro cores. V_FP+V_BP grew from 19 to 35 lines to keep V_TOTAL
+// pinned at 262 (V-freq 60.05 Hz NTSC-locked).
 //
-// Reasonable porch envelope (for tuning):
+// Porch envelope (for tuning):
 //   H_FP+H_BP must equal 77 (H_TOTAL-H_ACTIVE-H_SYNC); larger H_BP shifts
 //   image right. Practical range: H_FP 5–50, H_BP 27–72.
-//   V_FP+V_BP must equal 19 (V_TOTAL-V_ACTIVE-V_SYNC); larger V_BP shifts
-//   image down. Practical range: V_FP 1–17, V_BP 2–18.
+//   V_FP+V_BP must equal 35 (V_TOTAL-V_ACTIVE-V_SYNC); larger V_BP shifts
+//   image down. Practical range: V_FP 3–25, V_BP 10–32.
 localparam [9:0] H_ACTIVE = 10'd320;
 localparam [9:0] H_FP     = 10'd26;
 localparam [5:0] H_SYNC   = 6'd32;
 localparam [9:0] H_BP     = 10'd51;
 localparam [9:0] H_TOTAL  = 10'd429;
 
-localparam [8:0] V_ACTIVE = 9'd240;
-localparam [8:0] V_FP     = 9'd2;
+localparam [8:0] V_ACTIVE = 9'd224;
+localparam [8:0] V_FP     = 9'd10;
 localparam [4:0] V_SYNC   = 5'd3;
-localparam [8:0] V_BP     = 9'd17;
+localparam [8:0] V_BP     = 9'd25;
 localparam [8:0] V_TOTAL  = 9'd262;
 
 // Derived boundaries — adjusted by OSD offsets.

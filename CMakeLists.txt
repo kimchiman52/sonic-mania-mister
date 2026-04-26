@@ -111,6 +111,22 @@ if(WIN32)
     target_compile_definitions(${GAME_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
 
+# Phase 10b: NTSC 240p sources (Genesis, SNES, etc.) emit ~224 active vertical
+# lines and that's what most CRT geometry circuitry is calibrated for. Sonic
+# Mania renders 240 lines by default, which overscans on a typical NTSC CRT
+# (image too tall vs. other retro cores on the same hardware). Override
+# SCREEN_YSIZE to 224 for the MiSTer build so the engine renders 224 lines and
+# the FPGA emits a 224-line analog frame matching standard 240p convention.
+# RetroEngine.hpp:154 has an `#ifndef SCREEN_YSIZE` guard added upstream
+# (Sonic-Mania-Decompilation PR #201, "Allows platforms to redefine them at
+# compile time."). videoSettings.pixHeight propagates via screens[s].size.y so
+# game logic (scene scroll, sprite culling, water effects, HUD) adapts.
+# Known caveat: TitleCard.c uses literal TO_FIXED(240) for zone-card strip
+# Y vertices — patched to TO_FIXED(SCREEN_YSIZE) in the same commit.
+if(PORT_MISTER)
+    target_compile_definitions(${GAME_NAME} PRIVATE SCREEN_YSIZE=224)
+endif()
+
 set_target_properties(${GAME_NAME} PROPERTIES OUTPUT_NAME ${GAME_OUTPUT_NAME})
 
 if(WITH_RSDK)

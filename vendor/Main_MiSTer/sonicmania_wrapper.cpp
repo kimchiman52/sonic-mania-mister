@@ -2738,13 +2738,12 @@ int sonicmania_wrapper_run(int argc, char *argv[])
 	//     adjustments — unchanged from baseline.
 	if (g_wrapper_used_full_user_io_init)
 	{
-		// Phase 9: do NOT seed status[10] (Mods). status_set here would clobber
-		// the value hps_io already loaded from the persistent BRAM/config —
-		// the previous "Mods default On (0)" seed was the bug behind "Restart
-		// flips Mods back to On". Default value (when no prior state exists)
-		// is determined by the CONF_STR option ordering: "Mods,Off,On" →
-		// status[10]=0 means Off, which is the desired post-rebuild default.
-		user_io_status_set("[12:11]", (uint32_t)g_wrapper_fps_mode);
+		// Phase 9: do NOT seed status[10] (Mods) — same reason as below. Skipping
+		// the user_io_status_set lets hps_io retain whatever the user last set.
+		// Phase 9c: do NOT seed status[12:11] (FPS Overlay) either — same bug
+		// pattern. Earlier the seed clobbered the OSD toggle so FPS Overlay
+		// always read as 0 (Off) post-Restart even if the user picked
+		// Simple/Detailed. CONF_STR default 0=Off is fine for first boot.
 		user_io_status_set("[28:25]", (uint32_t)g_wrapper_h_position);
 		user_io_status_set("[46:43]", (uint32_t)g_wrapper_v_position);
 		user_io_status_set("[32]", (uint32_t)g_wrapper_vertical_crop);
@@ -3081,10 +3080,10 @@ int sonicmania_wrapper_run(int argc, char *argv[])
 
 			// Re-seed status bits so the menu reflects current values after restart.
 			// Phase 9 scope cut: status[13] reserved for Phase 10 (no seed).
-			// status[10] (Mods) intentionally NOT re-seeded — hps_io retains the
-			// user's choice across the engine respawn. Earlier code seeded 0
-			// here and that's why Restart was flipping the Mods toggle back.
-			user_io_status_set("[12:11]", (uint32_t)g_wrapper_fps_mode);
+			// status[10] (Mods) and status[12:11] (FPS Overlay) intentionally
+			// NOT re-seeded — hps_io retains the user's choice across the engine
+			// respawn. Earlier code seeded 0 / g_wrapper_fps_mode here and
+			// that's why Restart flipped Mods back to On / FPS Overlay back to Off.
 			user_io_status_set("[28:25]", (uint32_t)g_wrapper_h_position);
 			user_io_status_set("[46:43]", (uint32_t)g_wrapper_v_position);
 			user_io_status_set("[32]", (uint32_t)g_wrapper_vertical_crop);
