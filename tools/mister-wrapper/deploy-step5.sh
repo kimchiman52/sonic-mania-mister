@@ -18,11 +18,34 @@ MISTER_PASSWORD="${MISTER_PASSWORD:-1}"
 
 WRAPPER_BIN="${ROOT_DIR}/build/mister-wrapper-hps/MiSTer_SonicMania"
 TEST_FRAME_WRITER="${ROOT_DIR}/build/mister-wrapper-hps/test-frame-writer"
-RBF_LOCAL="${ROOT_DIR}/build/mister-wrapper-core/Sonic_Mania.rbf"
+
+# MiSTer convention: RBFs are named "<Core>_YYYYMMDD.rbf" so the firmware can
+# auto-pick the newest dated build when multiple variants of the same prefix
+# coexist in /media/fat/_Other/. tools/mister-wrapper/build-core.sh writes
+# Sonic_Mania_<DATE>.rbf and a stable Sonic_Mania.rbf symlink pointing at the
+# latest. We resolve the symlink (or fall back to glob-newest) so the deploy
+# carries the dated name onto the device.
+resolve_latest_rbf() {
+    local prefix="$1"  # e.g., Sonic_Mania
+    local dir="${ROOT_DIR}/build/mister-wrapper-core"
+    if [ -L "${dir}/${prefix}.rbf" ]; then
+        local target
+        target="$(readlink "${dir}/${prefix}.rbf")"
+        echo "${dir}/${target}"
+        return
+    fi
+    if [ -f "${dir}/${prefix}.rbf" ]; then
+        echo "${dir}/${prefix}.rbf"
+        return
+    fi
+    # Glob fallback: newest dated file.
+    ls -1t "${dir}/${prefix}"_*.rbf 2>/dev/null | head -1
+}
+RBF_LOCAL="$(resolve_latest_rbf Sonic_Mania)"
 # Phase 10: optional 16:9 widescreen RBF (built via build-core.sh --aspect 16:9).
 # Filename suffix "_169" is the canonical aspect marker; the wrapper detects
 # it from argv[1] at core-load time and emits SONIC_MANIA_ASPECT=widescreen.
-RBF_LOCAL_169="${ROOT_DIR}/build/mister-wrapper-core/Sonic_Mania_169.rbf"
+RBF_LOCAL_169="$(resolve_latest_rbf Sonic_Mania_169)"
 
 have_sshpass() { command -v sshpass >/dev/null 2>&1; }
 
@@ -56,23 +79,29 @@ else
     echo "!! no wrapper binary at ${WRAPPER_BIN}; run tools/mister-wrapper/build-hps.sh first"
 fi
 
-# RBF (4:3, default aspect)
-if [ -f "${RBF_LOCAL}" ]; then
-    echo "-> copy RBF ${RBF_LOCAL} -> /media/fat/_Other/Sonic Mania.rbf"
-    scp_remote "${RBF_LOCAL}" "/media/fat/_Other/Sonic Mania.rbf"
+# RBF (4:3, default aspect). MiSTer convention: the dated filename
+# (Sonic_Mania_YYYYMMDD.rbf) is what lands on the device, matching every
+# upstream MiSTer core. The firmware auto-picks the newest dated file when
+# multiple coexist, so an old undated Sonic_Mania.rbf in _Other/ won't
+# interfere — but it's still wise to clean those out by hand once.
+if [ -n "${RBF_LOCAL}" ] && [ -f "${RBF_LOCAL}" ]; then
+    rbf_basename="$(basename "${RBF_LOCAL}")"
+    echo "-> copy RBF ${RBF_LOCAL} -> /media/fat/_Other/${rbf_basename}"
+    scp_remote "${RBF_LOCAL}" "/media/fat/_Other/${rbf_basename}"
 else
-    echo "!! no 4:3 RBF at ${RBF_LOCAL}"
+    echo "!! no 4:3 RBF resolved (looked under build/mister-wrapper-core/)"
     echo "   (not a deploy blocker; Quartus build runs separately on colima quartus2 VM)"
 fi
 
 # Phase 10: 16:9 widescreen RBF (optional). Shipped under a filename that
 # preserves the "_169" marker so the wrapper's detect_aspect_from_rbf()
 # resolves SONIC_MANIA_ASPECT=widescreen at core-load time.
-if [ -f "${RBF_LOCAL_169}" ]; then
-    echo "-> copy 16:9 RBF ${RBF_LOCAL_169} -> /media/fat/_Other/Sonic Mania_169.rbf"
-    scp_remote "${RBF_LOCAL_169}" "/media/fat/_Other/Sonic Mania_169.rbf"
+if [ -n "${RBF_LOCAL_169}" ] && [ -f "${RBF_LOCAL_169}" ]; then
+    rbf169_basename="$(basename "${RBF_LOCAL_169}")"
+    echo "-> copy 16:9 RBF ${RBF_LOCAL_169} -> /media/fat/_Other/${rbf169_basename}"
+    scp_remote "${RBF_LOCAL_169}" "/media/fat/_Other/${rbf169_basename}"
 else
-    echo "(no 16:9 RBF at ${RBF_LOCAL_169}; Phase 10 widescreen not deployed this run)"
+    echo "(no 16:9 RBF resolved; Phase 10 widescreen not deployed this run)"
 fi
 
 # Test frame writer -- place under /media/fat/games/sonic-mania/.

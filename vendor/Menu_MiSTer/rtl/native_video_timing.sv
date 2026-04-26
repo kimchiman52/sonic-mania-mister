@@ -51,22 +51,29 @@ module native_video_timing (
 // subtracts from FP).  H_TOTAL and V_TOTAL are always preserved.
 //
 // 4:3 modeline rationale (Phase 10b):
-//   H 320 active + 24 FP + 31 sync + 32 BP = 407 total
-//   V 224 active + 10 FP +  3 sync + 25 BP = 262 total
+//   H 320 active + 18 FP + 31 sync + 38 BP = 407 total
+//   V 224 active + 13 FP +  3 sync + 22 BP = 262 total
 //   refresh = 6,400,000 / (407*262) = 60.05 Hz
 //   H_freq  = 6,400,000 / 407       = 15,725 Hz (within NTSC tolerance)
 //
-// Phase 10b retune (this revision):
+// Phase 10b porches (this revision):
+//   - Baked H Position +6 and V Position -3 into porches so OSD defaults
+//     (0/0) land on the user's CRT center. Earlier values H_FP=24/H_BP=32
+//     V_FP=10/V_BP=25 produced an image that the user had to bump +6 H
+//     and -3 V via the OSD to get centered. Equivalent porch math:
+//       H_FP 24 → 18 (+6 right via larger effective H_BP),
+//       H_BP 32 → 38 (sum 56, unchanged)
+//       V_FP 10 → 13 (-3 up via smaller effective V_BP),
+//       V_BP 25 → 22 (sum 35, unchanged)
+//
+// Phase 10b also changed (history):
 //   - Pixel clock 6.75 → 6.40 MHz (PLL retune in pll_video_0002.v).
 //     Slower pixels mean 320 active fills more of each line: 78.6% (was
-//     74.6%) → wider visible image on the CRT, closer to Genesis 320×224
-//     convention which spans 93.8% of the line at 5.37 MHz. We didn't go
-//     all the way to 5.37 MHz to keep YC-subcarrier math healthy.
+//     74.6%) → wider visible image on the CRT.
 //   - V_ACTIVE 240 → 224 to match NTSC 240p console envelope. Engine
 //     compiles with -DSCREEN_YSIZE=224 so frame is 320×224.
 //   - H_TOTAL 429 → 407 to keep H-freq locked near 15,734 Hz given the
-//     slower pixel clock. Sum of porches now 87 cycles (was 109) — H_FP
-//     and H_BP scaled proportionally (FP 26→24, BP 51→32, SYNC 32→31).
+//     slower pixel clock.
 //
 // Porch envelope (for tuning):
 //   H_FP+H_BP must equal 56 (H_TOTAL-H_ACTIVE-H_SYNC); larger H_BP shifts
@@ -74,15 +81,15 @@ module native_video_timing (
 //   V_FP+V_BP must equal 35 (V_TOTAL-V_ACTIVE-V_SYNC); larger V_BP shifts
 //   image down. Practical range: V_FP 3–25, V_BP 10–32.
 localparam [9:0] H_ACTIVE = 10'd320;
-localparam [9:0] H_FP     = 10'd24;
+localparam [9:0] H_FP     = 10'd18;
 localparam [5:0] H_SYNC   = 6'd31;
-localparam [9:0] H_BP     = 10'd32;
+localparam [9:0] H_BP     = 10'd38;
 localparam [9:0] H_TOTAL  = 10'd407;
 
 localparam [8:0] V_ACTIVE = 9'd224;
-localparam [8:0] V_FP     = 9'd10;
+localparam [8:0] V_FP     = 9'd13;
 localparam [4:0] V_SYNC   = 5'd3;
-localparam [8:0] V_BP     = 9'd25;
+localparam [8:0] V_BP     = 9'd22;
 localparam [8:0] V_TOTAL  = 9'd262;
 
 // Derived boundaries — adjusted by OSD offsets.

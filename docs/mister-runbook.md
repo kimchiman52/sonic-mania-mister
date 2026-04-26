@@ -106,9 +106,12 @@ AND BUF0/BUF1 zeroed, the writer mmap'd, memset, and wrote frames.
 - Wrapper HPS binary `MiSTer_SonicMania` built (armhf, 1,030,916 B).
 - Deployed to MiSTer via `tools/mister-wrapper/deploy-step5.sh`:
   - `/media/fat/MiSTer_SonicMania` (wrapper)
-  - `/media/fat/_Other/Sonic Mania.rbf` (core)
+  - `/media/fat/_Other/Sonic_Mania_YYYYMMDD.rbf` (4:3 core, dated per MiSTer
+    convention — see `docs/mister-rbf-naming.md`)
+  - `/media/fat/_Other/Sonic_Mania_169_YYYYMMDD.rbf` (16:9 core, optional)
   - `/media/fat/games/sonic-mania/test-frame-writer` (320×240 RGB565 DDR3 pattern writer)
-  - `MiSTer.ini` `[Sonic Mania]` section added with `vga_scaler=0`
+  - `MiSTer.ini` `[Sonic Mania]` and `[Sonic Mania (16:9)]` sections, both
+    with `vga_scaler=0`
 
 **Next (requires user hands on hardware):**
 1. Boot "Sonic Mania" from MiSTer `_Other/` menu.

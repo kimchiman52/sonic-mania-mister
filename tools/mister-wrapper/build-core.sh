@@ -302,12 +302,12 @@ timing = File.read(timing_path)
 # V_BP=28 (NTSC-typical).
 {
   "H_ACTIVE = 10\x27d320" => "H_ACTIVE = 10\x27d424",
-  "H_FP     = 10\x27d24"  => "H_FP     = 10\x27d26",
+  "H_FP     = 10\x27d18"  => "H_FP     = 10\x27d26",
   "H_SYNC   = 6\x27d31"   => "H_SYNC   = 6\x27d32",
-  "H_BP     = 10\x27d32"  => "H_BP     = 10\x27d63",
+  "H_BP     = 10\x27d38"  => "H_BP     = 10\x27d63",
   "H_TOTAL  = 10\x27d407" => "H_TOTAL  = 10\x27d545",
-  "V_FP     = 9\x27d10"   => "V_FP     = 9\x27d11",
-  "V_BP     = 9\x27d25"   => "V_BP     = 9\x27d28",
+  "V_FP     = 9\x27d13"   => "V_FP     = 9\x27d11",
+  "V_BP     = 9\x27d22"   => "V_BP     = 9\x27d28",
   "V_TOTAL  = 9\x27d262"  => "V_TOTAL  = 9\x27d266",
 }.each do |from, to|
   next if from == to
@@ -353,7 +353,16 @@ build_project() {
     fi
 
     [ -f "${staged_rbf}" ] || { echo "missing built RBF: ${staged_rbf}" >&2; return 1; }
-    cp "${staged_rbf}" "${OUTPUT_DIR}/${PROJECT_NAME}.rbf"
+    # MiSTer convention: append _YYYYMMDD to the RBF filename. The firmware
+    # auto-picks the most recent dated file when multiple variants of the
+    # same prefix exist in /media/fat/_Other/. Standard pattern across all
+    # upstream cores (see e.g. AcornAtom_20251001.rbf, C64_20250828.rbf).
+    # Prefix can be overridden via MISTER_BUILD_DATE for reproducible builds.
+    local build_date="${MISTER_BUILD_DATE:-$(date +%Y%m%d)}"
+    cp "${staged_rbf}" "${OUTPUT_DIR}/${PROJECT_NAME}_${build_date}.rbf"
+    # Also write a stable un-dated symlink so deploy scripts and CI have a
+    # predictable path to the latest build of this aspect variant.
+    (cd "${OUTPUT_DIR}" && ln -sf "${PROJECT_NAME}_${build_date}.rbf" "${PROJECT_NAME}.rbf")
 }
 
 build_docker_image() {
@@ -389,7 +398,10 @@ build_project_in_docker() {
 
     local staged_rbf="${BUILD_SRC_DIR}/output_files/${PROJECT_NAME}.rbf"
     [ -f "${staged_rbf}" ] || { echo "missing built RBF after Docker compile: ${staged_rbf}" >&2; return 1; }
-    cp "${staged_rbf}" "${OUTPUT_DIR}/${PROJECT_NAME}.rbf"
+    # MiSTer convention: see build_project() above for rationale.
+    local build_date="${MISTER_BUILD_DATE:-$(date +%Y%m%d)}"
+    cp "${staged_rbf}" "${OUTPUT_DIR}/${PROJECT_NAME}_${build_date}.rbf"
+    (cd "${OUTPUT_DIR}" && ln -sf "${PROJECT_NAME}_${build_date}.rbf" "${PROJECT_NAME}.rbf")
 }
 
 COMMAND=""
