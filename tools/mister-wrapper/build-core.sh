@@ -282,7 +282,7 @@ reader_path = ARGV[2]
 
 # ---- 1. PLL coefficients --------------------------------------------------
 pll = File.read(pll_path)
-pll.sub!(%(.output_clock_frequency0("27.000000 MHz")),
+pll.sub!(%(.output_clock_frequency0("25.600000 MHz")),
          %(.output_clock_frequency0("34.827600 MHz"))) or
   abort("16:9 patch: failed to retarget output_clock_frequency0 in #{pll_path}")
 # Comment header: leave the 4:3 prose intact but append a 16:9 note. We only
@@ -294,14 +294,18 @@ File.write(pll_path, pll)
 
 # ---- 2. Modeline totals + porches ----------------------------------------
 timing = File.read(timing_path)
-# Phase 10b: V_ACTIVE pinned at 224 in both aspects (matches NTSC 240p
-# console convention, set in 4:3 source). 16:9 V_TOTAL=266 leaves
-# 39 lines of vertical porch; distribute V_FP=11 / V_BP=28 (NTSC-typical).
+# Phase 10b: 4:3 source has been retuned to 6.4 MHz pixel clock (was 6.75)
+# with H_TOTAL=407, H_FP=24, H_SYNC=31, H_BP=32 to widen the visible image.
+# 16:9 stays at its original 8.7069 MHz / H_TOTAL=545 modeline (not yet
+# widened — separate decision). V_ACTIVE pinned at 224 in both aspects.
+# 16:9 V_TOTAL=266 leaves 39 lines of vertical porch; distribute V_FP=11 /
+# V_BP=28 (NTSC-typical).
 {
   "H_ACTIVE = 10\x27d320" => "H_ACTIVE = 10\x27d424",
-  "H_FP     = 10\x27d26"  => "H_FP     = 10\x27d26",   # noop, retained for tuning
-  "H_BP     = 10\x27d51"  => "H_BP     = 10\x27d63",
-  "H_TOTAL  = 10\x27d429" => "H_TOTAL  = 10\x27d545",
+  "H_FP     = 10\x27d24"  => "H_FP     = 10\x27d26",
+  "H_SYNC   = 6\x27d31"   => "H_SYNC   = 6\x27d32",
+  "H_BP     = 10\x27d32"  => "H_BP     = 10\x27d63",
+  "H_TOTAL  = 10\x27d407" => "H_TOTAL  = 10\x27d545",
   "V_FP     = 9\x27d10"   => "V_FP     = 9\x27d11",
   "V_BP     = 9\x27d25"   => "V_BP     = 9\x27d28",
   "V_TOTAL  = 9\x27d262"  => "V_TOTAL  = 9\x27d266",

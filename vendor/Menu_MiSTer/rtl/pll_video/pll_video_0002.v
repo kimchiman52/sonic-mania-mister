@@ -1,11 +1,16 @@
 // Sonic Mania pll_video instance — 4:3 NTSC-exact mode.
 //
-// Phase 9 retarget: CLK_VIDEO = 27.000000 MHz exact. Pixel clock at DAC =
-// CLK_VIDEO / 4 = 6.750000 MHz. Paired with native_video_timing.sv 4:3
-// H_TOTAL=429, V_TOTAL=262 yields refresh = 60.07 Hz, H-freq = 15,734 Hz
-// (NTSC-exact).
+// Phase 10b retarget: CLK_VIDEO = 25.600000 MHz. Pixel clock at DAC =
+// CLK_VIDEO / 4 = 6.400000 MHz. Slowed from Phase 9c's 6.75 MHz to widen the
+// active region as a fraction of each line on the CRT — 320 active pixels
+// span 78.6% of the line at 6.4 MHz (was 74.6% at 6.75 MHz). Paired with
+// native_video_timing.sv 4:3 H_TOTAL=407 keeps H-freq at 15,725 Hz (within
+// NTSC tolerance of 15,734 Hz). V_TOTAL stays at 262 → refresh = 60.05 Hz.
+// Image is wider on a typical 4:3 CRT, more closely matching Genesis 5.37
+// MHz convention without going all the way (which would degrade
+// YC-subcarrier math).
 //
-// Expected fit: M=81, N=5, C=30 (VCO 810 MHz, /30 = 27.000 MHz exact).
+// Expected fit: M=64, N=5, C=25 (VCO 640 MHz, /25 = 25.600 MHz exact).
 // Verify in fitter log post-compile.
 //
 // The `operation_mode("direct")` string below is inherited verbatim from the
@@ -42,8 +47,8 @@ module  pll_video_0002(
 		.reference_clock_frequency("50.0 MHz"),
 		.operation_mode("direct"),
 		.number_of_clocks(1),
-		// Phase 9: 27.000 MHz exact (M=81/N=5/C=30, VCO 810 MHz). Verify M/N/C in fitter log.
-		.output_clock_frequency0("27.000000 MHz"),
+		// Phase 10b: 25.600 MHz (M=64/N=5/C=25, VCO 640 MHz). Verify M/N/C in fitter log.
+		.output_clock_frequency0("25.600000 MHz"),
 		.phase_shift0("0 ps"),
 		.duty_cycle0(50),
 		.output_clock_frequency1("0 MHz"),

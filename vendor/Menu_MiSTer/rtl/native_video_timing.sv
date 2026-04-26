@@ -50,28 +50,34 @@ module native_video_timing (
 // Positive h_offset/v_offset = shift image right/down (adds to BP,
 // subtracts from FP).  H_TOTAL and V_TOTAL are always preserved.
 //
-// 4:3 modeline rationale:
-//   H 320 active + 26 FP + 32 sync + 51 BP = 429 total
+// 4:3 modeline rationale (Phase 10b):
+//   H 320 active + 24 FP + 31 sync + 32 BP = 407 total
 //   V 224 active + 10 FP +  3 sync + 25 BP = 262 total
-//   refresh = 6,750,000 / (429*262) = 60.07 Hz
-//   H_freq  = 6,750,000 / 429       = 15,734 Hz (NTSC-exact)
+//   refresh = 6,400,000 / (407*262) = 60.05 Hz
+//   H_freq  = 6,400,000 / 407       = 15,725 Hz (within NTSC tolerance)
 //
-// Phase 10b retune: V_ACTIVE 240 → 224 to match standard NTSC 240p console
-// convention (Genesis/SNES). Engine now compiles with -DSCREEN_YSIZE=224 so
-// the rendered frame is 320×224. CRT shows the same vertical extent as
-// other retro cores. V_FP+V_BP grew from 19 to 35 lines to keep V_TOTAL
-// pinned at 262 (V-freq 60.05 Hz NTSC-locked).
+// Phase 10b retune (this revision):
+//   - Pixel clock 6.75 → 6.40 MHz (PLL retune in pll_video_0002.v).
+//     Slower pixels mean 320 active fills more of each line: 78.6% (was
+//     74.6%) → wider visible image on the CRT, closer to Genesis 320×224
+//     convention which spans 93.8% of the line at 5.37 MHz. We didn't go
+//     all the way to 5.37 MHz to keep YC-subcarrier math healthy.
+//   - V_ACTIVE 240 → 224 to match NTSC 240p console envelope. Engine
+//     compiles with -DSCREEN_YSIZE=224 so frame is 320×224.
+//   - H_TOTAL 429 → 407 to keep H-freq locked near 15,734 Hz given the
+//     slower pixel clock. Sum of porches now 87 cycles (was 109) — H_FP
+//     and H_BP scaled proportionally (FP 26→24, BP 51→32, SYNC 32→31).
 //
 // Porch envelope (for tuning):
-//   H_FP+H_BP must equal 77 (H_TOTAL-H_ACTIVE-H_SYNC); larger H_BP shifts
-//   image right. Practical range: H_FP 5–50, H_BP 27–72.
+//   H_FP+H_BP must equal 56 (H_TOTAL-H_ACTIVE-H_SYNC); larger H_BP shifts
+//   image right. Practical range: H_FP 5–35, H_BP 21–51.
 //   V_FP+V_BP must equal 35 (V_TOTAL-V_ACTIVE-V_SYNC); larger V_BP shifts
 //   image down. Practical range: V_FP 3–25, V_BP 10–32.
 localparam [9:0] H_ACTIVE = 10'd320;
-localparam [9:0] H_FP     = 10'd26;
-localparam [5:0] H_SYNC   = 6'd32;
-localparam [9:0] H_BP     = 10'd51;
-localparam [9:0] H_TOTAL  = 10'd429;
+localparam [9:0] H_FP     = 10'd24;
+localparam [5:0] H_SYNC   = 6'd31;
+localparam [9:0] H_BP     = 10'd32;
+localparam [9:0] H_TOTAL  = 10'd407;
 
 localparam [8:0] V_ACTIVE = 9'd224;
 localparam [8:0] V_FP     = 9'd10;

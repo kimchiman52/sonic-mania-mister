@@ -3083,15 +3083,17 @@ static void set_yc_mode()
 		// was loaded. The wrapper detects the aspect from the RBF filename in
 		// detect_aspect_from_rbf() and stores the result in
 		// g_wrapper_aspect_ratio (0 = 4:3 / 1 = full/widescreen).
-		//   4:3:        M=81 / N=5 / C=30 -> 27.000 MHz CLK_VIDEO
-		//   widescreen: M=101/ N=5 / C=29 -> 34.8276 MHz (1010/29) CLK_VIDEO
+		//   4:3 (Phase 10b): M=64 / N=5 / C=25 -> 25.600 MHz CLK_VIDEO
+		//                    (slowed from Phase 9c's 27.0 MHz to widen visible
+		//                    image — pixel clock is now CLK_VIDEO/4 = 6.4 MHz)
+		//   widescreen:      M=101/ N=5 / C=29 -> 34.8276 MHz (1010/29) CLK_VIDEO
 		// Each PLL is statically configured in its respective RBF; the wrapper
 		// just needs the right scalar here so YC PHASE_INC and COLORBURST math
 		// land on the correct subcarrier phase. Mismatch -> grayscale S-Video.
 		const double core_CLK_VIDEO = native_video_enabled
 			? (g_wrapper_aspect_ratio == 1 /* widescreen */
 				? (1010.0 / 29.0)  // 34.8276 MHz exact (16:9 RBF)
-				: 27.0)             // 4:3 RBF
+				: 25.6)             // 4:3 RBF (Phase 10b)
 			: (current_video_info.ctime * 100.f / current_video_info.ptime);
 		double CLK_VIDEO = core_CLK_VIDEO;
 		const double output_CLK_VIDEO = v_cur.Fpix;
