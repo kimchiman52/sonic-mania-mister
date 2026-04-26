@@ -299,7 +299,7 @@ assign LED_POWER[0]= FB ? led[2] : act_cnt2[26] ? act_cnt2[25:18] > act_cnt2[7:0
 // 3sx-specific options REMOVED: Game Mode, Hold to Pause, Button Check,
 // SA Activation, SA Ghost Res, SA Ghost Count, Overclock.
 localparam CONF_STR = {
-	"Sonic Mania;UART31250,MIDI;",
+	"Sonic Mania (4:3);UART31250,MIDI;",
 	"O[10],Mods,Off,On;",
 	"O[12:11],FPS Overlay,Off,Simple,Detailed;",
 	"-;",

@@ -29,7 +29,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-ASPECT_VARIANT="${MISTER_WRAPPER_CORE_ASPECT:-4:3}"
+ASPECT_VARIANT="${MISTER_WRAPPER_CORE_ASPECT:-16:9}"
 case "${ASPECT_VARIANT}" in
     4:3|16:9) ;;
     *)
@@ -38,16 +38,19 @@ case "${ASPECT_VARIANT}" in
         ;;
 esac
 case "${ASPECT_VARIANT}" in
-    4:3)  ASPECT_PROJECT_SUFFIX="" ;;
-    16:9) ASPECT_PROJECT_SUFFIX="_169" ;;
+    # Phase 10c: 16:9 is now the default (most users have modern displays).
+    # 4:3 is the named variant with the "_43" filename marker. Both filename
+    # and CONF_STR header carry the variant tag; see docs/mister-rbf-naming.md.
+    16:9) ASPECT_PROJECT_SUFFIX="" ;;
+    4:3)  ASPECT_PROJECT_SUFFIX="_43" ;;
 esac
 OUTPUT_DIR="${OUTPUT_DIR:-${ROOT_DIR}/build/mister-wrapper-core}"
 BUILD_SRC_DIR="${OUTPUT_DIR}/src${ASPECT_PROJECT_SUFFIX}"
 PROJECT_NAME_BASE="${MISTER_WRAPPER_CORE_NAME:-Sonic_Mania}"
 PROJECT_NAME="${PROJECT_NAME_BASE}${ASPECT_PROJECT_SUFFIX}"
 case "${ASPECT_VARIANT}" in
-    4:3)  PROJECT_DISPLAY_NAME="${MISTER_WRAPPER_CORE_DISPLAY_NAME:-Sonic Mania}" ;;
-    16:9) PROJECT_DISPLAY_NAME="${MISTER_WRAPPER_CORE_DISPLAY_NAME:-Sonic Mania (16:9)}" ;;
+    16:9) PROJECT_DISPLAY_NAME="${MISTER_WRAPPER_CORE_DISPLAY_NAME:-Sonic Mania}" ;;
+    4:3)  PROJECT_DISPLAY_NAME="${MISTER_WRAPPER_CORE_DISPLAY_NAME:-Sonic Mania (4:3)}" ;;
 esac
 CORE_SEED="${MISTER_WRAPPER_CORE_SEED:-menu}"
 DOCKER_IMAGE="${MISTER_WRAPPER_CORE_IMAGE:-sonic-mania-mister-wrapper-quartus17}"
@@ -189,13 +192,13 @@ File.write(qip_path, qip)
 
 sv_path = ARGV[2]
 sv = File.read(sv_path)
-# Phase 10: idempotent CONF_STR header rewrite. The canonical seed has been
-# updated through Phase 9c so the header literal may already be
-# "Sonic Mania;UART31250,MIDI;" rather than the original placeholder
-# "MENU;UART31250,MIDI;". We accept either and rewrite to "<display>;UART31250,MIDI;".
-# This lets --aspect 16:9 retarget "Sonic Mania" -> "Sonic Mania (16:9)"
-# while leaving the trailing core options ("UART31250,MIDI") intact.
-header_re = /"(?:MENU|Sonic Mania(?:\s*\(16:9\))?);UART31250,MIDI;"/
+# Phase 10: idempotent CONF_STR header rewrite. Accepts the original
+# placeholder "MENU;..." OR any of our variant headers ("Sonic Mania",
+# "Sonic Mania (4:3)", "Sonic Mania (16:9)") and rewrites to
+# "<display>;UART31250,MIDI;". Since Phase 10c the canonical source is
+# "Sonic Mania (4:3);..." (4:3 is now the named variant); --aspect 16:9
+# retargets to "Sonic Mania;" (the new default).
+header_re = /"(?:MENU|Sonic Mania(?:\s*\((?:4:3|16:9)\))?);UART31250,MIDI;"/
 unless sv.sub!(header_re, %("#{display};UART31250,MIDI;"))
   abort("failed to patch CONF_STR header (display=#{display.inspect}) in #{sv_path}")
 end
@@ -420,8 +423,9 @@ while [ "$#" -gt 0 ]; do
             [ "$#" -ge 2 ] || { echo "missing value for --aspect" >&2; exit 1; }
             ASPECT_VARIANT="$2"
             case "${ASPECT_VARIANT}" in
-                4:3)  ASPECT_PROJECT_SUFFIX="" ;;
-                16:9) ASPECT_PROJECT_SUFFIX="_169" ;;
+                # Phase 10c default-swap: 16:9 = default (no suffix), 4:3 = named.
+                16:9) ASPECT_PROJECT_SUFFIX="" ;;
+                4:3)  ASPECT_PROJECT_SUFFIX="_43" ;;
                 *)
                     echo "unsupported --aspect: ${ASPECT_VARIANT} (must be 4:3 or 16:9)" >&2
                     exit 1
@@ -430,8 +434,8 @@ while [ "$#" -gt 0 ]; do
             BUILD_SRC_DIR="${OUTPUT_DIR}/src${ASPECT_PROJECT_SUFFIX}"
             PROJECT_NAME="${PROJECT_NAME_BASE}${ASPECT_PROJECT_SUFFIX}"
             case "${ASPECT_VARIANT}" in
-                4:3)  PROJECT_DISPLAY_NAME="${MISTER_WRAPPER_CORE_DISPLAY_NAME:-Sonic Mania}" ;;
-                16:9) PROJECT_DISPLAY_NAME="${MISTER_WRAPPER_CORE_DISPLAY_NAME:-Sonic Mania (16:9)}" ;;
+                16:9) PROJECT_DISPLAY_NAME="${MISTER_WRAPPER_CORE_DISPLAY_NAME:-Sonic Mania}" ;;
+                4:3)  PROJECT_DISPLAY_NAME="${MISTER_WRAPPER_CORE_DISPLAY_NAME:-Sonic Mania (4:3)}" ;;
             esac
             shift 2
             ;;

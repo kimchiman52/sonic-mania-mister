@@ -2443,18 +2443,19 @@ const char *wrapper_rbf_name(bool forced, int argc, char *argv[])
 	return user_io_get_core_name(1);
 }
 
-// Phase 10: detect 16:9 vs 4:3 from the RBF filename MiSTer loaded.
+// Phase 10c: detect 4:3 vs 16:9 from the RBF filename MiSTer loaded.
 //
-// Canonical convention (must match tools/mister-wrapper/build-core.sh
-// --aspect 16:9 output): the 16:9 RBF carries the "_169" suffix
-// (e.g. "Sonic_Mania_169.rbf"). The wrapper accepts a few additional
-// markers ("(16:9)", "(16-9)") so a manually renamed deployment still
-// works. Anything else falls back to 4:3.
+// Convention swap (Phase 10c, 2026-04-26): 16:9 is now the DEFAULT (most
+// users have modern displays). 4:3 is the explicitly-tagged variant. So
+// the absence of any marker → widescreen. The "_43" / "(4:3)" / "(4-3)" /
+// "4x3" markers explicitly select 4:3. Legacy "_169" / "(16:9)" markers
+// are still accepted for widescreen so a manually renamed RBF from
+// pre-Phase-10c builds still resolves correctly.
 //
 // Returns kAspectRatioFull (=widescreen) or kAspectRatio4x3.
 int detect_aspect_from_rbf(const char *rbf_path)
 {
-	if (!rbf_path || !rbf_path[0]) return kAspectRatio4x3;
+	if (!rbf_path || !rbf_path[0]) return kAspectRatioFull; // default = widescreen
 
 	// Skip directory components — match against basename only.
 	const char *base = rbf_path;
@@ -2474,14 +2475,16 @@ int detect_aspect_from_rbf(const char *rbf_path)
 	}
 	buf[n] = 0;
 
-	if (strstr(buf, "_169") ||
-	    strstr(buf, "(16:9)") ||
-	    strstr(buf, "(16-9)") ||
-	    strstr(buf, "16x9"))
+	// Explicit 4:3 markers.
+	if (strstr(buf, "_43") ||
+	    strstr(buf, "(4:3)") ||
+	    strstr(buf, "(4-3)") ||
+	    strstr(buf, "4x3"))
 	{
-		return kAspectRatioFull;
+		return kAspectRatio4x3;
 	}
-	return kAspectRatio4x3;
+	// Default and legacy widescreen markers all → widescreen.
+	return kAspectRatioFull;
 }
 
 int wait_for_child(pid_t child, bool service_ui)

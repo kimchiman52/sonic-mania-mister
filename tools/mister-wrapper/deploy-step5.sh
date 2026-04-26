@@ -41,11 +41,13 @@ resolve_latest_rbf() {
     # Glob fallback: newest dated file.
     ls -1t "${dir}/${prefix}"_*.rbf 2>/dev/null | head -1
 }
+# Phase 10c default-swap: the unsuffixed `Sonic_Mania_*.rbf` is the 16:9
+# widescreen variant (now the default for modern-display users). The
+# explicitly-tagged `Sonic_Mania_43_*.rbf` is the 4:3 named variant for
+# CRT users. The wrapper's detect_aspect_from_rbf() flips on the "_43"
+# marker; absence of any marker resolves to widescreen.
 RBF_LOCAL="$(resolve_latest_rbf Sonic_Mania)"
-# Phase 10: optional 16:9 widescreen RBF (built via build-core.sh --aspect 16:9).
-# Filename suffix "_169" is the canonical aspect marker; the wrapper detects
-# it from argv[1] at core-load time and emits SONIC_MANIA_ASPECT=widescreen.
-RBF_LOCAL_169="$(resolve_latest_rbf Sonic_Mania_169)"
+RBF_LOCAL_43="$(resolve_latest_rbf Sonic_Mania_43)"
 
 have_sshpass() { command -v sshpass >/dev/null 2>&1; }
 
@@ -79,29 +81,29 @@ else
     echo "!! no wrapper binary at ${WRAPPER_BIN}; run tools/mister-wrapper/build-hps.sh first"
 fi
 
-# RBF (4:3, default aspect). MiSTer convention: the dated filename
-# (Sonic_Mania_YYYYMMDD.rbf) is what lands on the device, matching every
-# upstream MiSTer core. The firmware auto-picks the newest dated file when
-# multiple coexist, so an old undated Sonic_Mania.rbf in _Other/ won't
-# interfere — but it's still wise to clean those out by hand once.
+# Default RBF (16:9 widescreen post-Phase-10c). MiSTer convention: the
+# dated filename `Sonic_Mania_YYYYMMDD.rbf` is what lands on the device,
+# matching every upstream MiSTer core. The firmware auto-picks the newest
+# dated file when multiple coexist, so old undated copies don't interfere
+# — but it's still wise to clean those out by hand once.
 if [ -n "${RBF_LOCAL}" ] && [ -f "${RBF_LOCAL}" ]; then
     rbf_basename="$(basename "${RBF_LOCAL}")"
-    echo "-> copy RBF ${RBF_LOCAL} -> /media/fat/_Other/${rbf_basename}"
+    echo "-> copy default (16:9) RBF ${RBF_LOCAL} -> /media/fat/_Other/${rbf_basename}"
     scp_remote "${RBF_LOCAL}" "/media/fat/_Other/${rbf_basename}"
 else
-    echo "!! no 4:3 RBF resolved (looked under build/mister-wrapper-core/)"
+    echo "!! no 16:9 RBF resolved (looked under build/mister-wrapper-core/)"
     echo "   (not a deploy blocker; Quartus build runs separately on colima quartus2 VM)"
 fi
 
-# Phase 10: 16:9 widescreen RBF (optional). Shipped under a filename that
-# preserves the "_169" marker so the wrapper's detect_aspect_from_rbf()
-# resolves SONIC_MANIA_ASPECT=widescreen at core-load time.
-if [ -n "${RBF_LOCAL_169}" ] && [ -f "${RBF_LOCAL_169}" ]; then
-    rbf169_basename="$(basename "${RBF_LOCAL_169}")"
-    echo "-> copy 16:9 RBF ${RBF_LOCAL_169} -> /media/fat/_Other/${rbf169_basename}"
-    scp_remote "${RBF_LOCAL_169}" "/media/fat/_Other/${rbf169_basename}"
+# 4:3 RBF (named variant for CRT users). Filename carries the "_43" marker
+# so the wrapper's detect_aspect_from_rbf() returns kAspectRatio4x3 and the
+# engine launches with pixWidth=320.
+if [ -n "${RBF_LOCAL_43}" ] && [ -f "${RBF_LOCAL_43}" ]; then
+    rbf43_basename="$(basename "${RBF_LOCAL_43}")"
+    echo "-> copy 4:3 RBF ${RBF_LOCAL_43} -> /media/fat/_Other/${rbf43_basename}"
+    scp_remote "${RBF_LOCAL_43}" "/media/fat/_Other/${rbf43_basename}"
 else
-    echo "(no 16:9 RBF resolved; Phase 10 widescreen not deployed this run)"
+    echo "(no 4:3 RBF resolved; named variant not deployed this run)"
 fi
 
 # Test frame writer -- place under /media/fat/games/sonic-mania/.
@@ -116,12 +118,21 @@ else
     echo "!! no test-frame-writer at ${TEST_FRAME_WRITER}"
 fi
 
-# Inject [Sonic Mania] and [Sonic Mania (16:9)] sections into MiSTer.ini.
+# Inject [Sonic Mania] (default = 16:9) and [Sonic Mania (4:3)] sections into
+# MiSTer.ini. Both route through the same wrapper binary
+# (main=MiSTer_SonicMania) and both disable the HDMI scaler (vga_scaler=0) so
+# native_video reaches the CRT. The wrapper differentiates the two cores at
+# runtime by inspecting the RBF filename it was loaded with
+# (Sonic_Mania_*.rbf = 16:9 default; Sonic_Mania_43_*.rbf = 4:3 named).
 #
-# Both sections route through the same wrapper binary (main=MiSTer_SonicMania)
-# and both disable the HDMI scaler (vga_scaler=0) so native_video reaches the
-# CRT. The wrapper differentiates the two cores at runtime by inspecting the
-# RBF filename it was loaded with (Sonic_Mania.rbf vs Sonic_Mania_169.rbf).
+# Phase 10c default-swap: section names match the new CONF_STR headers
+# (Sonic Mania = 16:9, Sonic Mania (4:3) = 4:3). The earlier
+# [Sonic Mania (16:9)] section from Phase 10b is no longer correct because
+# the 16:9 RBF rebuilt under Phase 10c emits CONF_STR "Sonic Mania;..."
+# (the new default). Best-effort cleanup: leave any pre-existing
+# [Sonic Mania (16:9)] section in place — it'll be ignored once that
+# section name no longer matches any RBF. User can rm it manually if
+# they want a clean .ini.
 ssh_remote 'bash -s' <<'REMOTE_INI'
 INI=/media/fat/MiSTer.ini
 if ! grep -qi '^\[Sonic Mania\]' "$INI" 2>/dev/null && ! grep -qi '^\[SonicMania\]' "$INI" 2>/dev/null; then
@@ -131,25 +142,21 @@ if ! grep -qi '^\[Sonic Mania\]' "$INI" 2>/dev/null && ! grep -qi '^\[SonicMania
 main=MiSTer_SonicMania
 vga_scaler=0
 EOF
-    echo "MiSTer.ini: added [Sonic Mania] section"
+    echo "MiSTer.ini: added [Sonic Mania] section (16:9 default)"
 else
     echo "MiSTer.ini: [Sonic Mania] already present (not modified)"
 fi
 
-# Phase 10: per-RBF section for the 16:9 widescreen variant. MiSTer matches
-# the section header against the core name shown in its menu, which for the
-# Sonic_Mania_169.rbf comes from the CONF_STR header "Sonic Mania (16:9);..."
-# patched into menu.sv at build time.
-if ! grep -qi '^\[Sonic Mania (16:9)\]' "$INI" 2>/dev/null; then
+if ! grep -qi '^\[Sonic Mania (4:3)\]' "$INI" 2>/dev/null; then
     cat >> "$INI" << EOF
 
-[Sonic Mania (16:9)]
+[Sonic Mania (4:3)]
 main=MiSTer_SonicMania
 vga_scaler=0
 EOF
-    echo "MiSTer.ini: added [Sonic Mania (16:9)] section"
+    echo "MiSTer.ini: added [Sonic Mania (4:3)] section"
 else
-    echo "MiSTer.ini: [Sonic Mania (16:9)] already present (not modified)"
+    echo "MiSTer.ini: [Sonic Mania (4:3)] already present (not modified)"
 fi
 REMOTE_INI
 

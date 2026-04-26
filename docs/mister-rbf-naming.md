@@ -35,16 +35,19 @@ RBFs.
 
 ## Sonic Mania RBFs
 
-This port ships two variants from one source tree:
+This port ships two variants from one source tree. **16:9 is the default**
+(most users have modern displays); **4:3 is the named variant** for CRT
+users.
 
 | Filename | Aspect | CONF_STR header | MiSTer.ini section |
 |---|---|---|---|
-| `Sonic_Mania_YYYYMMDD.rbf` | 4:3 | `Sonic Mania;...` | `[Sonic Mania]` |
-| `Sonic_Mania_169_YYYYMMDD.rbf` | 16:9 widescreen | `Sonic Mania (16:9);...` | `[Sonic Mania (16:9)]` |
+| `Sonic_Mania_YYYYMMDD.rbf` | 16:9 widescreen (default) | `Sonic Mania;...` | `[Sonic Mania]` |
+| `Sonic_Mania_43_YYYYMMDD.rbf` | 4:3 (named) | `Sonic Mania (4:3);...` | `[Sonic Mania (4:3)]` |
 
-The `_169` marker in the 16:9 filename is required — the wrapper's
-`detect_aspect_from_rbf()` substring-matches it (along with `(16:9)`,
-`(16-9)`, `16x9`) and emits `SONIC_MANIA_ASPECT=widescreen` to the engine.
+The `_43` marker in the 4:3 filename is required — the wrapper's
+`detect_aspect_from_rbf()` substring-matches it (along with `(4:3)`,
+`(4-3)`, `4x3`) and emits `SONIC_MANIA_ASPECT=4:3` to the engine.
+Absence of any aspect marker resolves to widescreen (the default).
 
 The MiSTer.ini section name comes from the **CONF_STR header**, NOT the
 filename. So renaming an RBF on disk doesn't break the section match —
@@ -53,16 +56,18 @@ CONF_STR declares as its first token.
 
 ## Build flow
 
-`tools/mister-wrapper/build-core.sh` produces dated RBFs automatically:
+`tools/mister-wrapper/build-core.sh` produces dated RBFs automatically.
+The default `--aspect` is `16:9` (post-Phase-10c default-swap):
 
 ```
-$ ./tools/mister-wrapper/build-core.sh --aspect 4:3
+$ ./tools/mister-wrapper/build-core.sh                # default = 16:9
+$ ./tools/mister-wrapper/build-core.sh --aspect 16:9  # explicit
 # -> build/mister-wrapper-core/Sonic_Mania_20260426.rbf
 # -> build/mister-wrapper-core/Sonic_Mania.rbf  (symlink to latest)
 
-$ ./tools/mister-wrapper/build-core.sh --aspect 16:9
-# -> build/mister-wrapper-core/Sonic_Mania_169_20260426.rbf
-# -> build/mister-wrapper-core/Sonic_Mania_169.rbf  (symlink to latest)
+$ ./tools/mister-wrapper/build-core.sh --aspect 4:3
+# -> build/mister-wrapper-core/Sonic_Mania_43_20260426.rbf
+# -> build/mister-wrapper-core/Sonic_Mania_43.rbf  (symlink to latest)
 ```
 
 The undated `Sonic_Mania.rbf` / `Sonic_Mania_169.rbf` symlinks always
