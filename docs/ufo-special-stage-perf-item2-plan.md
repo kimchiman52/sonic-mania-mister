@@ -1,7 +1,7 @@
 # UFO Special Stage — Per-Scanline Division Elimination (Item 2)
 
 **Document date:** 2026-04-25
-**Status:** Plan only. To be executed in a single `/implement` pass.
+**Status:** Implemented in commit `9678afb0` (2026-04-26). Deployed to MiSTer (BuildID `8c726c5755f3838c3ad1629c45ea29fd695ccb60`). User-gated gameplay test pending. See "Plan execution notes" at the bottom.
 **Branch:** `mister`
 **Scope:** Replace the per-iteration `__aeabi_idiv` call in all three `UFO_Setup_Scanline_*` callbacks with a shared per-frame Q30 reciprocal table, multiplied in-loop. Single commit on `mister`. The RSDKv5 submodule (`dependencies/RSDKv5`) is NOT modified.
 
@@ -746,3 +746,24 @@ If Approach F is shipped instead of C, document that pivot in the commit body an
 ## Wrap-up
 
 Append any deferred issues, runtime-smoke notes, or unexpected findings to a section here named `## Plan execution notes — <date>` at the bottom. Do not modify earlier sections of this file.
+
+## Plan execution notes — 2026-04-26
+
+Plan executed end-to-end via a single `/implement` pass (implement → review → fix → verify → commit). Approach C (shared per-frame Q30 reciprocal table) shipped as designed; fallback Approach F not needed.
+
+**Commit:** `9678afb0` — `mister: replace per-scanline divide with shared Q30 reciprocal table` on `mister`. Single commit per Locked Decision.
+
+**Deviations from plan (justified):**
+- **`(long long)` instead of `(int64)` for the 64-bit intermediate cast.** RSDK's `int64` typedef lives inside the C++ `RSDK` namespace and isn't visible from the C unity-build TU at `SonicMania/Objects/All.c`. `(long long)` is the underlying type and produces the same `smull` codegen on ARM. SDL2 desktop and armhf cross-build both clean.
+- **Sentinel literal `(-2147483647 - 1)` instead of `INT32_MIN`.** Plan explicitly authorized this as an acceptable form. (Implementer's rationale that `<stdio.h>` brings `INT32_MIN` transitively on the SDL2 desktop build is empirically wrong — `<stdint.h>` is the canonical source either way — but the literal is functionally equivalent and the code is correct. Flagged as a P-2 in the implement-review for the rationale only; not worth a follow-up commit + redeploy churn.)
+- **Step 2 A/B desktop runtime compare skipped** per plan's explicit allowance ("if running interactively isn't possible from a headless agent context, the build-pass smoke is acceptable since the changes are mathematically deterministic").
+
+**Review-cycle findings:** zero P-1, two cosmetic P-2 from the implementation review (`docs/ufo-special-stage-perf-item2-implement-review.md`). Both flagged as worth tightening if Item 3 forces a re-touch:
+1. Misleading `<stdint.h>` rationale in commit body and source comment (code itself correct).
+2. Redundant sinX/cosX recomputation between BuildRecipTable and each callback (4 LUT lookups/frame on cache miss; tiny).
+
+**Deploy:** cross-built telemetry-flavor armhf via `tools/mister/build-game.sh --flavor telemetry`; deployed via the now-fixed `tools/mister/deploy-to-mister.sh` (lowercase canonical path, post `26a717ba`). On-device binary BuildID `8c726c5755f3838c3ad1629c45ea29fd695ccb60` matches host. Boot-smoke ran 8s through engine init → SigHandler → MiSTerRenderDevice → NativeVideoWriter (320×224) → clean SIGTERM exit. No crash.
+
+**Honest expectation:** ~24k cycles/frame saved (~40 μs at 600 MHz HPS, ~0.24% of a 60 fps budget). Not dramatic on its own. The wider perf effort assumed Items 2 + 3 + 5 + 6 stack; Item 2 alone may not be perceptible in casual play but should show up in F12 jitter dumps.
+
+**Next:** user-gated gameplay test (Step 5). Drive UFO5 (the heaviest case — Plasma + 3D Roof active), look for any visual regression in scanline-band texture during slow camera motion, capture an F12 telemetry dump for jitter comparison if perceptible.
