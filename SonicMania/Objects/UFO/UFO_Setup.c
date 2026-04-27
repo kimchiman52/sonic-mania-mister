@@ -254,6 +254,13 @@ void UFO_Setup_Scanline_3DRoof(ScanlineInfo *scanlines)
 
     RSDK.SetClipBounds(0, 0, 0, ScreenInfo->size.x, camera->clipY - 48);
 
+    // Phase 11 perf: when the roof clip region is empty, the tile layer renders
+    // zero rows; setting up the 240 scanline entries (and 240 SetActivePalette
+    // calls) is wasted work. SetClipBounds is preserved above so the screen-wide
+    // clip state is still correct for this layer.
+    if (camera->clipY <= 48)
+        return;
+
     int32 sin  = RSDK.Sin1024(camera->angle) >> 2;
     int32 cos  = RSDK.Cos1024(camera->angle) >> 2;
     int32 sinX = RSDK.Sin1024(-camera->angleX) >> 2;
