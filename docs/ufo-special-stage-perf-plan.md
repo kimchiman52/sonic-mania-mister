@@ -589,3 +589,25 @@ Three independent commits in dependency order means partial revert (e.g., revert
 ## Wrap-up
 
 Append any deferred issues, runtime-smoke notes, or unexpected findings to a section here named `## Plan execution notes — <date>` at the bottom. Do not modify earlier sections of this file.
+
+## Plan execution notes — 2026-04-26
+
+Plan executed end-to-end via a single `/implement` pass (implement → review → fix → verify). All three items landed as three independent commits on `mister`, in plan order:
+
+```
+7541c0d2 mister: skip 3D Roof scanline setup when fully clipped              (Item 4)
+e6115147 mister: coalesce per-scanline SetActivePalette into RLE bands       (Item 1)
+5735e614 mister: early-return UFO_Sphere_Draw on near-zero zdepth            (Item 7)
+```
+
+**Deviations from the plan:**
+
+- Commit-message prefix: used `mister:` (matching in-house style per `git log`) instead of the plan's suggested `perf(ufo):`. Bodies preserved.
+- Runtime smoke test skipped per plan's allowance — desktop SDL2 build passes clean, changes are mechanical, headless session can't reach a special stage from the title screen. Deferred to whoever next deploys to MiSTer hardware: re-confirm visually on UFO5 (plasma + 3D roof + heavy sphere field).
+
+**Review-cycle findings:** zero P-1, zero P-2 from the implementation review (`docs/ufo-special-stage-perf-implement-review.md`). All plan-flagged correctness checks verified directly against the deployed code:
+- Item 4: `SetClipBounds` precedes the `clipY <= 48` early-return.
+- Item 1: all three callbacks have `bandBank = -1` sentinel, transition emit uses OLD bank with `[bandStart, line)` exclusive end, trailing flush at `SCREEN_YSIZE` runs after each loop.
+- Item 7: disjunction `||`, `DrawSprite` after the early-return.
+
+**Open follow-up:** items 2/3/5/6 from the wider perf investigation are still unaddressed. Item 2 (stepped reciprocal in place of per-scanline division) is the highest remaining payoff for HPS Cortex-A9 specifically (no hardware divider) but carries precision risk and was deferred per user direction. Item 3 (sphere/ring radius cull before matrix multiply) is the second-best low-risk follow-up if more headroom is needed.
