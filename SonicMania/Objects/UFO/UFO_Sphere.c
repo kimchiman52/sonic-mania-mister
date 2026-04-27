@@ -39,13 +39,14 @@ void UFO_Sphere_Draw(void)
 {
     RSDK_THIS(UFO_Sphere);
 
-    if (self->drawGroup == 4 && self->zdepth >= 0x100) {
-        self->direction = self->animator.frameID > 8;
-        self->drawPos.x = (ScreenInfo->center.x + (self->worldPos.x << 8) / self->zdepth) << 16;
-        self->drawPos.y = (ScreenInfo->center.y - (self->worldPos.y << 8) / self->zdepth) << 16;
-        self->scale.x   = self->scaleFactor / self->zdepth;
-        self->scale.y   = self->scaleFactor / self->zdepth;
-    }
+    if (self->drawGroup != 4 || self->zdepth < 0x100)
+        return;
+
+    self->direction = self->animator.frameID > 8;
+    self->drawPos.x = (ScreenInfo->center.x + (self->worldPos.x << 8) / self->zdepth) << 16;
+    self->drawPos.y = (ScreenInfo->center.y - (self->worldPos.y << 8) / self->zdepth) << 16;
+    self->scale.x   = self->scaleFactor / self->zdepth;
+    self->scale.y   = self->scaleFactor / self->zdepth;
 
     RSDK.DrawSprite(&self->animator, &self->drawPos, true);
 }
