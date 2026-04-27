@@ -327,8 +327,20 @@ always @(posedge ddr_clk) begin
                     // the FPGA's vblank poll.
                     if (stale_vblank_count < 5'd30)
                         stale_vblank_count <= stale_vblank_count + 5'd1;
-                    if (stale_vblank_count >= 5'd29)
-                        frame_ready_reg <= 1'b0;
+                    // Phase 10c+: do NOT force frame_ready_reg low after a
+                    // long stale stretch. The previous behaviour blanked the
+                    // display after ~500 ms of ARM silence, which produced a
+                    // one-frame "all-black + 1px-bottom-content" flash on
+                    // every heavy LoadScene because the recovery path only
+                    // restores frame_ready_reg=1 when cur_line == V_ACTIVE-1
+                    // (line 375). The earlier ST_CHECK_CTRL fix
+                    // (`if (first_frame_loaded) frame_ready_reg <= 1'b1;`)
+                    // turned out to not be sufficient; removing the blank
+                    // entirely freezes the last good frame instead of going
+                    // black during ARM stalls, which is the better failure
+                    // mode for a userland engine that genuinely paused (e.g.
+                    // long flash reads). If ARM never resumes, the display
+                    // will sit on the last frame indefinitely — acceptable.
                     // Re-read previous buffer (buf_base_addr unchanged)
                     cur_line      <= 9'd0;
                     preloading    <= 1'b1;
