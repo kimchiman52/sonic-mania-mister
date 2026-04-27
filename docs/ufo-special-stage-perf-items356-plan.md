@@ -692,3 +692,16 @@ Two P-1 fixes and one P-2 applied per `docs/ufo-special-stage-perf-items356-revi
 - **P-2C (Step 0 SSH/log-tail command):** Step 0 procedure now includes the `sshpass`/`tail -F /tmp/sonicmania.log` command for retrieving F12 jitter dumps, plus the dump format reminder.
 
 The plan now ships two commits: Item 6 (Plasma half-rate, body-only) and Item 5 (fat-scanline 3DFloor + 3DRoof). Item 3 is closed-out, not deferred — if a future "every cycle counts" pass is wanted, it should be planned standalone with a frustum-cull framing rather than the broken 2D radius cull.
+
+---
+
+## Plan execution notes — 2026-04-25
+
+- **Item 6 shipped** as commit `575c2c1f` ("mister: half-rate UFO_Plasma scanline+blit on UFO5"). Single-file edit to `SonicMania/Objects/UFO/UFO_Plasma.c`; the 240-iteration scanline-table setup and `RSDK.DrawDeformedSprite(..., INK_MASKED, 0x100)` call are wrapped in `if (!(UFO_Setup->timer & 1)) { ... }`; the trailing `RSDK.SetClipBounds(...)` and `RSDK.SetActivePalette(0, 0, ScreenInfo->size.y)` calls remain unconditional outside the gate. Diff stat: `+30/-14`.
+- **Item 5 deferred** per explicit user direction for this `/implement` pass. The fat-scanline 3DFloor/3DRoof change is not in this commit; future `/implement` pass to pick it up if desired (or close-out if Item 6 alone moves the needle enough on UFO5).
+- **Step 0 measurement** was not run before this pass. Item 6 ships unconditionally per the plan's locked decision; Item 5's gating on Step 0 is moot since Item 5 was deferred independently of measurement.
+- **SDL2 desktop build:** clean (`build-p7-fix-sdl2`, `cmake --build ... -j8`). No new warnings versus baseline.
+- **armhf telemetry cross-build:** clean (`tools/mister/build-game.sh --flavor telemetry`). Output `build/mister-telemetry-install/bin/RSDKv5U` is ARM EABI5 ELF, BuildID `b4c234baebc1c90f391918051a8cde3e4d209d8b`, 6,645,440 bytes.
+- **Deploy:** rsync to `root@192.168.1.188:/media/fat/games/sonic-mania/` (lowercase canonical post-`26a717ba`). Successful, ~3.3 MB transferred.
+- **On-device boot smoke** (8s timeout): engine init reached `NativeVideoWriter_Init: width=320 height=224 frame_bytes=143360 buf1_offset=0x23100 region=0x80000`; SigHandler installed for SIGSEGV/SIGBUS/SIGABRT/SIGFPE/SIGILL; clean SIGTERM exit (exit code 124, expected from `timeout -s TERM`). No segfaults, no Illegal instructions.
+- **User-gated gameplay test on UFO5** is the next step (Step 6); not executed by this `/implement` pass. Validate: (1) no color flicker on spheres/rings every other frame (would indicate the trailing palette reset got skipped); (2) lightning effect at 30 Hz subjectively acceptable; (3) F6 `r` ms drops noticeably on UFO5 vs. pre-Item-6 baseline.
