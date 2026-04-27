@@ -301,6 +301,23 @@ always @(posedge ddr_clk) begin
                     preloading         <= 1'b1;
                     fifo_aclr_cnt      <= 4'd8;
                     state              <= ST_READ_LINE;
+                    // Recover from prior stale-blank state (frame_ready_reg
+                    // was forced low after >29 stale vblanks below). Without
+                    // this, on the first new frame after a long pause from
+                    // ARM (e.g. >500 ms LoadScene), frame_ready_reg only
+                    // flips back to 1 in ST_LINE_DONE when cur_line ==
+                    // V_ACTIVE-1 — by which point the display has already
+                    // scanned rows 0..V_ACTIVE-2 with nv_active=0, painting
+                    // them forced-black per Menu.sv:780-782. Net effect was
+                    // a 1-frame "all-black + bottom-row-only-content" flash
+                    // visible on every heavy scene transition (intro->Stage1
+                    // first time, stage->UFO Special). Safe to set high here:
+                    // by the time the display scanout starts (post-VBLANK),
+                    // line 0 has already been preloaded into the FIFO. The
+                    // first_frame_loaded gate keeps boot semantics intact —
+                    // the very first frame ever still waits for line 223.
+                    if (first_frame_loaded)
+                        frame_ready_reg <= 1'b1;
                 end
                 else if (first_frame_loaded) begin
                     // Stale frame but we have a valid previous buffer --
