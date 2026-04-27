@@ -35,7 +35,7 @@ MISTER_HOST=192.168.1.188 MISTER_PASSWORD=1 \
 sshpass -p "${MISTER_PASSWORD:-1}" ssh \
     -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
     root@192.168.1.188 \
-    'timeout -s TERM 10 /media/fat/games/SonicMania/scripts/run-mania.sh' \
+    'timeout -s TERM 10 /media/fat/games/sonic-mania/scripts/run-mania.sh' \
     2>&1 | tee /tmp/mania-smoke.log
 ```
 
@@ -52,7 +52,7 @@ sshpass -p "${MISTER_PASSWORD:-1}" ssh \
 | `MISTER_HOST`            | deploy          | `192.168.1.188` |
 | `MISTER_USER`            | deploy          | `root` |
 | `MISTER_PASSWORD`        | deploy          | `1` |
-| `MISTER_REMOTE_BASE`     | deploy          | `/media/fat/games/SonicMania` |
+| `MISTER_REMOTE_BASE`     | deploy          | `/media/fat/games/sonic-mania` |
 
 ## Phase scope
 

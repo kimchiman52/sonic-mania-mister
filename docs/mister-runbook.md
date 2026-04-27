@@ -61,7 +61,7 @@ ssh root@192.168.1.188 'busybox devmem 0x3A000000 32 0xDEADBEEF; \
                         busybox devmem 0x3A000100 32 0xCAFEBABE; \
                         busybox devmem 0x3A025900 32 0xFEEDFACE'
 # run the binary briefly
-ssh root@192.168.1.188 'cd /media/fat/games/SonicMania && timeout 5 ./RSDKv5U'
+ssh root@192.168.1.188 'cd /media/fat/games/sonic-mania && timeout 5 ./RSDKv5U'
 ssh root@192.168.1.188 'busybox devmem 0x3A000000; busybox devmem 0x3A000100; busybox devmem 0x3A025900'
 # expected: ctrl non-zero+changed, BUF0 and BUF1 zeroed (by memset in Init)
 ```
@@ -415,20 +415,20 @@ MISTER_HOST=192.168.1.188 MISTER_PASSWORD=1 \
 ```
 
 Copies `build/mister-telemetry-package/` to
-`/media/fat/games/SonicMania/` via `rsync` over `ssh` (using `sshpass` to
+`/media/fat/games/sonic-mania/` via `rsync` over `ssh` (using `sshpass` to
 pass the stock MiSTer `1` password). Safety:
 
 - Never uses `rsync --delete`; preserves any `Data.rsdk` + save files
   already on device. (See memory `feedback-no-rsync-delete.md`.)
-- Remote path is whitelist-checked against `/media/fat/games/SonicMania`.
+- Remote path is whitelist-checked against `/media/fat/games/sonic-mania`.
   Retarget via `MISTER_REMOTE_BASE`, but the whitelist will reject any
   other path until updated deliberately.
 - `MANIA_FLAVOR=clean` switches to the clean-flavor package.
 
 On the MiSTer after deploy:
 ```bash
-sshpass -p "${MISTER_PASSWORD}" ssh root@192.168.1.188 'ls -la /media/fat/games/SonicMania/bin/'
-sshpass -p "${MISTER_PASSWORD}" ssh root@192.168.1.188 'file /media/fat/games/SonicMania/bin/RSDKv5U'
+sshpass -p "${MISTER_PASSWORD}" ssh root@192.168.1.188 'ls -la /media/fat/games/sonic-mania/bin/'
+sshpass -p "${MISTER_PASSWORD}" ssh root@192.168.1.188 'file /media/fat/games/sonic-mania/bin/RSDKv5U'
 ```
 The `file` output on-device must match what the host reported.
 
@@ -459,7 +459,7 @@ Phase 0.)
 sshpass -p "${MISTER_PASSWORD}" ssh \
     -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
     root@192.168.1.188 \
-    'timeout -s TERM 10 /media/fat/games/SonicMania/scripts/run-mania.sh' \
+    'timeout -s TERM 10 /media/fat/games/sonic-mania/scripts/run-mania.sh' \
     2>&1 | tee /tmp/mania-smoke.log
 ```
 
@@ -480,7 +480,7 @@ A passing `/tmp/mania-smoke.log` shows either:
 ## Required game data
 
 `Data.rsdk` is NOT shipped. User supplies. Upload separately (for example
-`scp Data.rsdk root@192.168.1.188:/media/fat/games/SonicMania/`). The
+`scp Data.rsdk root@192.168.1.188:/media/fat/games/sonic-mania/`). The
 deploy script intentionally does not touch `Data.rsdk`.
 
 ## Troubleshooting

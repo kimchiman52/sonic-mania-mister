@@ -19,7 +19,7 @@ flavor="${MANIA_FLAVOR:-telemetry}"
 mister_host="${MISTER_HOST:-192.168.1.188}"
 mister_user="${MISTER_USER:-root}"
 mister_password="${MISTER_PASSWORD:-1}"
-remote_base="${MISTER_REMOTE_BASE:-/media/fat/games/SonicMania}"
+remote_base="${MISTER_REMOTE_BASE:-/media/fat/games/sonic-mania}"
 src_dir="${ROOT_DIR}/build/mister-${flavor}-package"
 
 usage() {
@@ -32,7 +32,7 @@ Environment:
   MISTER_HOST        MiSTer IP or hostname (default: 192.168.1.188)
   MISTER_USER        MiSTer SSH user (default: root)
   MISTER_PASSWORD    MiSTer SSH password (default: 1)
-  MISTER_REMOTE_BASE Remote install dir (whitelisted; default: /media/fat/games/SonicMania)
+  MISTER_REMOTE_BASE Remote install dir (whitelisted; default: /media/fat/games/sonic-mania)
 
 Outputs:
   Copies \${src_dir} -> \${mister_user}@\${mister_host}:\${remote_base}/
@@ -56,15 +56,14 @@ if ! command -v sshpass >/dev/null 2>&1; then
     exit 2
 fi
 
-# Whitelist guard: refuse to deploy outside the canonical games/SonicMania
-# directory. Phase 0 picks the space-free name per phase-0-plan.md Open
-# Question 1; Phase 4 may rename to 'Sonic Mania' if/when we align with the
-# FPGA core's RBF filename.
+# Whitelist guard: refuse to deploy outside the canonical games/sonic-mania
+# directory. Phase 4 settled on the lowercase-hyphenated name (matches the
+# wrapper, save dirs, Data.rsdk location, and every other tool in this repo).
 case "${remote_base}" in
-    /media/fat/games/SonicMania|/media/fat/games/SonicMania/) ;;
+    /media/fat/games/sonic-mania|/media/fat/games/sonic-mania/) ;;
     *)
         echo "refusing to deploy to non-whitelisted remote base: ${remote_base}" >&2
-        echo "(whitelist: /media/fat/games/SonicMania)" >&2
+        echo "(whitelist: /media/fat/games/sonic-mania)" >&2
         exit 3
         ;;
 esac
