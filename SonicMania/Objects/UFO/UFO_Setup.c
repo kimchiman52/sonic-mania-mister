@@ -9,6 +9,41 @@
 
 ObjectUFO_Setup *UFO_Setup;
 
+// Per-frame reciprocal cache shared across the three UFO_Setup_Scanline_*
+// callbacks. Built lazily by whichever callback runs first in a frame and
+// observes a cache miss; reused by the other two. Cache key is angleX only:
+// the divisor sequence div[i] = sinX + ((-SCREEN_YCENTER + i) * cosX) >> 8
+// depends only on angleX (camera->angle does NOT enter the divisor). Sentinel
+// is the int32 minimum; angleX runtime range is [-0x100, 0x100] per
+// UFO_Camera_HandleCamPos, so the sentinel is unambiguously outside any
+// plausible angle and the first frame always misses cleanly. Spelled as a
+// literal so it compiles in both the SDL2 desktop build (which gets INT32_MIN
+// transitively from <stdio.h>) and the armhf cross-build (which does not).
+#define UFO_SETUP_RECIP_SHIFT 30
+#define UFO_SETUP_ANGLEX_SENTINEL (-2147483647 - 1)
+static int32 ufo_setup_cached_angleX = UFO_SETUP_ANGLEX_SENTINEL;
+static int32 ufo_setup_recip_table[SCREEN_YSIZE];
+
+static inline void UFO_Setup_BuildRecipTable(EntityUFO_Camera *camera)
+{
+    if (camera->angleX == ufo_setup_cached_angleX)
+        return;
+
+    int32 sinX   = RSDK.Sin1024(-camera->angleX) >> 2;
+    int32 cosX   = RSDK.Cos1024(-camera->angleX) >> 2;
+    int32 cosVal = -SCREEN_YCENTER * cosX;
+
+    for (int32 i = 0; i < SCREEN_YSIZE; ++i) {
+        int32 div = sinX + (cosVal >> 8);
+        if (!div)
+            div = 1;
+        ufo_setup_recip_table[i] = (int32)(((long long)1 << UFO_SETUP_RECIP_SHIFT) / div);
+        cosVal += cosX;
+    }
+
+    ufo_setup_cached_angleX = camera->angleX;
+}
+
 void UFO_Setup_Update(void)
 {
     RSDK_THIS(UFO_Setup);
@@ -194,17 +229,13 @@ void UFO_Setup_Scanline_Playfield(ScanlineInfo *scanlines)
     int32 sinX = RSDK.Sin1024(-camera->angleX) >> 2;
     int32 cosX = RSDK.Cos1024(-camera->angleX) >> 2;
 
-    int32 cosVal = -SCREEN_YCENTER * cosX;
+    UFO_Setup_BuildRecipTable(camera);
 
     int32 bandStart = 0;
     int32 bandBank  = -1;
 
     for (int32 i = -SCREEN_YCENTER; i < SCREEN_YCENTER; ++i) {
-        int32 div = sinX + (cosVal >> 8);
-        if (!div)
-            div = 1;
-
-        int32 h             = camera->height / div;
+        int32 h             = (int32)(((long long)camera->height * ufo_setup_recip_table[i + SCREEN_YCENTER]) >> UFO_SETUP_RECIP_SHIFT);
         scanlines->deform.x = (-cos * h) >> 8;
         scanlines->deform.y = (sin * h) >> 8;
 
@@ -223,7 +254,6 @@ void UFO_Setup_Scanline_Playfield(ScanlineInfo *scanlines)
         scanlines->position.y = (cos * pos - ScreenInfo->center.x * scanlines->deform.y) + camera->position.y;
 
         scanlines++;
-        cosVal += cosX;
     }
 
     if (bandBank >= 0)
@@ -241,17 +271,13 @@ void UFO_Setup_Scanline_3DFloor(ScanlineInfo *scanlines)
     int32 sinX = RSDK.Sin1024(-camera->angleX) >> 2;
     int32 cosX = RSDK.Cos1024(-camera->angleX) >> 2;
 
-    int32 cosVal = -SCREEN_YCENTER * cosX;
+    UFO_Setup_BuildRecipTable(camera);
 
     int32 bandStart = 0;
     int32 bandBank  = -1;
 
     for (int32 i = -SCREEN_YCENTER; i < SCREEN_YCENTER; ++i) {
-        int32 div = sinX + (cosVal >> 8);
-        if (!div)
-            div = 1;
-
-        int32 h             = (camera->height + 0x1000000) / div;
+        int32 h             = (int32)(((long long)(camera->height + 0x1000000) * ufo_setup_recip_table[i + SCREEN_YCENTER]) >> UFO_SETUP_RECIP_SHIFT);
         scanlines->deform.x = -(cos * h) >> 8;
         scanlines->deform.y = (sin * h) >> 8;
 
@@ -270,7 +296,6 @@ void UFO_Setup_Scanline_3DFloor(ScanlineInfo *scanlines)
         scanlines->position.y = (cos * pos - ScreenInfo->center.x * scanlines->deform.y) + camera->position.y;
 
         scanlines++;
-        cosVal += cosX;
     }
 
     if (bandBank >= 0)
@@ -294,18 +319,15 @@ void UFO_Setup_Scanline_3DRoof(ScanlineInfo *scanlines)
     int32 sinX = RSDK.Sin1024(-camera->angleX) >> 2;
     int32 cosX = RSDK.Cos1024(-camera->angleX) >> 2;
 
-    int32 cosVal = -SCREEN_YCENTER * cosX;
+    UFO_Setup_BuildRecipTable(camera);
+
     int32 height = (camera->height >> 2) - 0x600000;
 
     int32 bandStart = 0;
     int32 bandBank  = -1;
 
     for (int32 i = -SCREEN_YCENTER; i < SCREEN_YCENTER; ++i) {
-        int32 div = sinX + (cosVal >> 8);
-        if (!div)
-            div = 1;
-
-        int32 h             = height / div;
+        int32 h             = (int32)(((long long)height * ufo_setup_recip_table[i + SCREEN_YCENTER]) >> UFO_SETUP_RECIP_SHIFT);
         scanlines->deform.x = -(cos * h) >> 8;
         scanlines->deform.y = (sin * h) >> 8;
 
@@ -324,7 +346,6 @@ void UFO_Setup_Scanline_3DRoof(ScanlineInfo *scanlines)
         scanlines->position.y = (cos * pos - ScreenInfo->center.x * scanlines->deform.y) + (camera->position.y >> 3);
 
         scanlines++;
-        cosVal += cosX;
     }
 
     if (bandBank >= 0)
