@@ -196,6 +196,9 @@ void UFO_Setup_Scanline_Playfield(ScanlineInfo *scanlines)
 
     int32 cosVal = -SCREEN_YCENTER * cosX;
 
+    int32 bandStart = 0;
+    int32 bandBank  = -1;
+
     for (int32 i = -SCREEN_YCENTER; i < SCREEN_YCENTER; ++i) {
         int32 div = sinX + (cosVal >> 8);
         if (!div)
@@ -205,8 +208,16 @@ void UFO_Setup_Scanline_Playfield(ScanlineInfo *scanlines)
         scanlines->deform.x = (-cos * h) >> 8;
         scanlines->deform.y = (sin * h) >> 8;
 
-        int32 pos = ((cosX * h) >> 8) - (sinX * ((i * h) >> 8) >> 8);
-        RSDK.SetActivePalette(CLAMP(abs(pos) >> 15, 0, 7), i + SCREEN_YCENTER, i + SCREEN_YCENTER + 1);
+        int32 pos  = ((cosX * h) >> 8) - (sinX * ((i * h) >> 8) >> 8);
+        int32 bank = CLAMP(abs(pos) >> 15, 0, 7);
+        int32 line = i + SCREEN_YCENTER;
+
+        if (bank != bandBank) {
+            if (bandBank >= 0)
+                RSDK.SetActivePalette(bandBank, bandStart, line);
+            bandStart = line;
+            bandBank  = bank;
+        }
 
         scanlines->position.x = (sin * pos - ScreenInfo->center.x * scanlines->deform.x) + camera->position.x;
         scanlines->position.y = (cos * pos - ScreenInfo->center.x * scanlines->deform.y) + camera->position.y;
@@ -214,6 +225,9 @@ void UFO_Setup_Scanline_Playfield(ScanlineInfo *scanlines)
         scanlines++;
         cosVal += cosX;
     }
+
+    if (bandBank >= 0)
+        RSDK.SetActivePalette(bandBank, bandStart, SCREEN_YSIZE);
 }
 
 void UFO_Setup_Scanline_3DFloor(ScanlineInfo *scanlines)
@@ -229,6 +243,9 @@ void UFO_Setup_Scanline_3DFloor(ScanlineInfo *scanlines)
 
     int32 cosVal = -SCREEN_YCENTER * cosX;
 
+    int32 bandStart = 0;
+    int32 bandBank  = -1;
+
     for (int32 i = -SCREEN_YCENTER; i < SCREEN_YCENTER; ++i) {
         int32 div = sinX + (cosVal >> 8);
         if (!div)
@@ -238,8 +255,16 @@ void UFO_Setup_Scanline_3DFloor(ScanlineInfo *scanlines)
         scanlines->deform.x = -(cos * h) >> 8;
         scanlines->deform.y = (sin * h) >> 8;
 
-        int32 pos = ((cosX * h) >> 8) - (sinX * ((i * h) >> 8) >> 8);
-        RSDK.SetActivePalette(CLAMP((abs(pos) >> 15) - 8, 0, 7), i + SCREEN_YCENTER, i + SCREEN_YCENTER + 1);
+        int32 pos  = ((cosX * h) >> 8) - (sinX * ((i * h) >> 8) >> 8);
+        int32 bank = CLAMP((abs(pos) >> 15) - 8, 0, 7);
+        int32 line = i + SCREEN_YCENTER;
+
+        if (bank != bandBank) {
+            if (bandBank >= 0)
+                RSDK.SetActivePalette(bandBank, bandStart, line);
+            bandStart = line;
+            bandBank  = bank;
+        }
 
         scanlines->position.x = (sin * pos - ScreenInfo->center.x * scanlines->deform.x) + camera->position.x;
         scanlines->position.y = (cos * pos - ScreenInfo->center.x * scanlines->deform.y) + camera->position.y;
@@ -247,6 +272,9 @@ void UFO_Setup_Scanline_3DFloor(ScanlineInfo *scanlines)
         scanlines++;
         cosVal += cosX;
     }
+
+    if (bandBank >= 0)
+        RSDK.SetActivePalette(bandBank, bandStart, SCREEN_YSIZE);
 }
 void UFO_Setup_Scanline_3DRoof(ScanlineInfo *scanlines)
 {
@@ -269,6 +297,9 @@ void UFO_Setup_Scanline_3DRoof(ScanlineInfo *scanlines)
     int32 cosVal = -SCREEN_YCENTER * cosX;
     int32 height = (camera->height >> 2) - 0x600000;
 
+    int32 bandStart = 0;
+    int32 bandBank  = -1;
+
     for (int32 i = -SCREEN_YCENTER; i < SCREEN_YCENTER; ++i) {
         int32 div = sinX + (cosVal >> 8);
         if (!div)
@@ -278,8 +309,16 @@ void UFO_Setup_Scanline_3DRoof(ScanlineInfo *scanlines)
         scanlines->deform.x = -(cos * h) >> 8;
         scanlines->deform.y = (sin * h) >> 8;
 
-        int32 pos = ((cosX * h) >> 8) - (sinX * ((i * h) >> 8) >> 8);
-        RSDK.SetActivePalette(CLAMP(abs(pos) >> 14, 0, 7), i + SCREEN_YCENTER, i + SCREEN_YCENTER + 1);
+        int32 pos  = ((cosX * h) >> 8) - (sinX * ((i * h) >> 8) >> 8);
+        int32 bank = CLAMP(abs(pos) >> 14, 0, 7);
+        int32 line = i + SCREEN_YCENTER;
+
+        if (bank != bandBank) {
+            if (bandBank >= 0)
+                RSDK.SetActivePalette(bandBank, bandStart, line);
+            bandStart = line;
+            bandBank  = bank;
+        }
 
         scanlines->position.x = (sin * pos - ScreenInfo->center.x * scanlines->deform.x) + (camera->position.x >> 3);
         scanlines->position.y = (cos * pos - ScreenInfo->center.x * scanlines->deform.y) + (camera->position.y >> 3);
@@ -287,6 +326,9 @@ void UFO_Setup_Scanline_3DRoof(ScanlineInfo *scanlines)
         scanlines++;
         cosVal += cosX;
     }
+
+    if (bandBank >= 0)
+        RSDK.SetActivePalette(bandBank, bandStart, SCREEN_YSIZE);
 }
 
 void UFO_Setup_PlaySphereSfx(void)
