@@ -271,10 +271,12 @@ apply_169_patches() {
     local pll_file="${BUILD_SRC_DIR}/rtl/pll_video/pll_video_0002.v"
     local timing_file="${BUILD_SRC_DIR}/rtl/native_video_timing.sv"
     local reader_file="${BUILD_SRC_DIR}/rtl/native_video_reader.sv"
+    local top_sv_file="${BUILD_SRC_DIR}/${PROJECT_NAME}.sv"
 
     [ -f "${pll_file}" ]    || { echo "missing PLL source for 16:9 patch: ${pll_file}" >&2; return 1; }
     [ -f "${timing_file}" ] || { echo "missing timing source for 16:9 patch: ${timing_file}" >&2; return 1; }
     [ -f "${reader_file}" ] || { echo "missing reader source for 16:9 patch: ${reader_file}" >&2; return 1; }
+    [ -f "${top_sv_file}" ] || { echo "missing top SV source for 16:9 patch: ${top_sv_file}" >&2; return 1; }
 
     ruby -e '
 require "fileutils"
@@ -282,6 +284,7 @@ require "fileutils"
 pll_path    = ARGV[0]
 timing_path = ARGV[1]
 reader_path = ARGV[2]
+top_sv_path = ARGV[3]
 
 # ---- 1. PLL coefficients --------------------------------------------------
 pll = File.read(pll_path)
@@ -338,7 +341,25 @@ reader = File.read(reader_path)
   end
 end
 File.write(reader_path, reader)
-' "${pll_file}" "${timing_file}" "${reader_file}"
+
+# ---- 4. Top-level aspect ratio reported to the MiSTer framework ----------
+# Without this, video_freak letterboxes the (correctly 424-wide) frame to a
+# 4:3 envelope and pillarboxes it on 16:9 displays. Bug fingerprint: HDMI
+# screen showed a centered 4:3 image with thick black left/right borders
+# even though native_video_timing.sv had H_ACTIVE=424.
+top_sv = File.read(top_sv_path)
+{
+  "wire [11:0] arx_in = ar_full ? 12\x27d0 : 12\x27d4;" =>
+    "wire [11:0] arx_in = ar_full ? 12\x27d0 : 12\x27d16;",
+  "wire [11:0] ary_in = ar_full ? 12\x27d0 : 12\x27d3;" =>
+    "wire [11:0] ary_in = ar_full ? 12\x27d0 : 12\x27d9;",
+}.each do |from, to|
+  unless top_sv.sub!(from, to)
+    abort("16:9 patch: failed to rewrite #{from.inspect} in #{top_sv_path}")
+  end
+end
+File.write(top_sv_path, top_sv)
+' "${pll_file}" "${timing_file}" "${reader_file}" "${top_sv_file}"
 }
 
 build_project() {
