@@ -81,6 +81,11 @@ void UFO_Player_Draw(void)
         }
 
         RSDK.Draw3DScene(UFO_Player->sceneIndex);
+        // MiSTer T1-A fix: tail-Prepare clears faceCount/vertexCount so any
+        // decorations queued between this sibling and the next don't inherit
+        // our just-rendered faces (which would double-render under whatever
+        // drawMode was last written to scn->drawMode).
+        RSDK.Prepare3DScene(UFO_Player->sceneIndex);
     }
 }
 

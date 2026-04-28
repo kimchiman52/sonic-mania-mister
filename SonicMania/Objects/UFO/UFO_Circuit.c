@@ -65,6 +65,10 @@ void UFO_Circuit_Draw(void)
                                    &self->matWorld, &self->matNormal, 0xFFFFFF);
 
         RSDK.Draw3DScene(UFO_Circuit->sceneIndex);
+        // MiSTer T1-A fix: tail-Prepare clears faceCount/vertexCount so any
+        // decorations queued between this sibling and the next don't inherit
+        // our just-rendered faces.
+        RSDK.Prepare3DScene(UFO_Circuit->sceneIndex);
     }
 }
 
