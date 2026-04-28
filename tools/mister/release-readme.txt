@@ -18,12 +18,21 @@ own the game.
 INSTALLATION
 ------------
 
-1. Extract this ZIP onto the ROOT of your MiSTer SD card. Files land
-   under /media/fat/MiSTer_SonicMania, /media/fat/_Other/Sonic_Mania*.rbf,
-   and /media/fat/games/sonic-mania/.
+1. Extract this ZIP into the FAT partition of your MiSTer SD card.
+   The end result should be:
+     <fat>/MiSTer_SonicMania
+     <fat>/_Other/Sonic_Mania*.rbf
+     <fat>/games/sonic-mania/...
 
-   FTP users: set transfer type to Binary, not Auto. Default mode
-   corrupts extensionless binaries.
+   Where <fat> is:
+     - The SD card root  (if the card is plugged into your PC/Mac —
+       the partition shows up as e.g. D:\ on Windows or
+       /Volumes/MISTER/ on macOS)
+     - /media/fat/        (if you are FTPing/SFTPing into a running
+       MiSTer — do NOT extract to "/", that's the Linux root)
+
+   FTP/SFTP users: set transfer type to Binary, not Auto. Default
+   mode corrupts extensionless binaries.
 
 2. Place Data.rsdk at /media/fat/games/sonic-mania/Data.rsdk
 
