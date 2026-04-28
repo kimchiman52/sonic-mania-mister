@@ -125,6 +125,14 @@ endif()
 # Y vertices — patched to TO_FIXED(SCREEN_YSIZE) in the same commit.
 if(PORT_MISTER)
     target_compile_definitions(${GAME_NAME} PRIVATE SCREEN_YSIZE=224)
+    # Propagate the same RSDK_USE_MISTER=1 gate the engine target gets
+    # (set in dependencies/RSDKv5/CMakeLists.txt:153-156 from RETRO_SUBSYSTEM)
+    # so that SonicMania-side MiSTer-specific paths (e.g. UFO_Decoration's
+    # non-interactive-skip in UFO_Decoration.c) are actually compiled in
+    # for the SonicMania static lib. Without this define on ${GAME_NAME},
+    # `#if defined(RSDK_USE_MISTER)` in SonicMania/Objects/* compiles to
+    # nothing — silently no-op'ing intended platform-specific code paths.
+    target_compile_definitions(${GAME_NAME} PRIVATE RSDK_USE_MISTER=1)
 endif()
 
 set_target_properties(${GAME_NAME} PROPERTIES OUTPUT_NAME ${GAME_OUTPUT_NAME})
