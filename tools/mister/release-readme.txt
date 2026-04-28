@@ -4,7 +4,7 @@ sonic-mania-mister — Sonic Mania for MiSTer FPGA
 A port of Sonic Mania for the MiSTer DE10-Nano. Experimental release.
 
 For background, AI disclosure, and known issues, see the project page:
-  https://github.com/sambae/sonic-mania-mister
+  https://github.com/kimchiman52/sonic-mania-mister
 
 
 REQUIREMENTS

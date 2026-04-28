@@ -125,13 +125,20 @@ void LogoSetup_State_NextLogos(void)
 {
     RSDK_THIS(LogoSetup);
 
+    // The Logos scene authors its second page at scene-y=240..480 — a fixed
+    // page pitch independent of viewport height. On the MiSTer build
+    // SCREEN_YSIZE=224, so scrolling by SCREEN_YSIZE leaves a 16-pixel band of
+    // inter-page background at the top of the second page and shifts the logos
+    // down. Use the literal 240 page pitch from the scene layout.
+    const int32 pageHeight = 240;
+
     if (self->timer >= 1024) {
-        if (ScreenInfo->position.y >= SCREEN_YSIZE) {
+        if (ScreenInfo->position.y >= pageHeight) {
             ++SceneInfo->listPos;
             RSDK.LoadScene();
         }
         else {
-            ScreenInfo->position.y += SCREEN_YSIZE;
+            ScreenInfo->position.y += pageHeight;
             self->state     = LogoSetup_State_ShowLogos;
             self->stateDraw = LogoSetup_Draw_Fade;
             self->timer     = 0x400;
