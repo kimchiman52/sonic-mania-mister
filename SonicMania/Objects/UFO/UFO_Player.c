@@ -57,7 +57,10 @@ void UFO_Player_Draw(void)
             RSDK.MatrixMultiply(&self->matWorld, &self->matWorld, &UFO_Camera->matWorld);
             RSDK.MatrixMultiply(&self->matNormal, &self->matNormal, &UFO_Camera->matView);
 
-            RSDK.AddModelTo3DScene(self->animator.animationID, UFO_Player->sceneIndex, S3D_SOLIDCOLOR_SHADED_BLENDED_SCREEN, &self->matWorld,
+            // MiSTer T1-C: gouraud (per-vertex) -> flat (per-face) shade.
+            // Saves 1.5-3 ms on the fattest single entity in UFO peak; visual
+            // cost is loss of smooth gradient across the player model.
+            RSDK.AddModelTo3DScene(self->animator.animationID, UFO_Player->sceneIndex, S3D_SOLIDCOLOR_SHADED_SCREEN, &self->matWorld,
                                    &self->matNormal, 0xFFFFFF);
         }
         else {
@@ -72,7 +75,8 @@ void UFO_Player_Draw(void)
             RSDK.MatrixRotateXYZ(&self->matNormal, 0, self->angle, 0);
             RSDK.MatrixMultiply(&self->matNormal, &self->matNormal, &UFO_Camera->matView);
 
-            RSDK.AddMeshFrameTo3DScene(self->animator.animationID, UFO_Player->sceneIndex, &self->animator, S3D_SOLIDCOLOR_SHADED_BLENDED_SCREEN,
+            // MiSTer T1-C: gouraud (per-vertex) -> flat (per-face) shade.
+            RSDK.AddMeshFrameTo3DScene(self->animator.animationID, UFO_Player->sceneIndex, &self->animator, S3D_SOLIDCOLOR_SHADED_SCREEN,
                                        &self->matWorld, &self->matNormal, 0xFFFFFF);
         }
 
