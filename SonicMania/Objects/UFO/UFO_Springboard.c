@@ -78,6 +78,9 @@ void UFO_Springboard_Draw(void)
     RSDK_THIS(UFO_Springboard);
 
     if (self->zdepth >= 0x4000) {
+        // MiSTer T1-A: flush queued decorations in shared View:Special scene
+        // before Prepare resets it. No-op when faceCount==0.
+        RSDK.Draw3DScene(UFO_Springboard->sceneIndex);
         RSDK.Prepare3DScene(UFO_Springboard->sceneIndex);
 
         RSDK.MatrixScaleXYZ(&self->matTemp, 0x100, self->scale.x, 0x100);

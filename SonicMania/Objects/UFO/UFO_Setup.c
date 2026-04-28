@@ -106,7 +106,14 @@ void UFO_Setup_StageLoad(void)
 
     RSDK.SetDrawGroupProperties(1, false, UFO_Setup_DrawHook_PrepareDrawingFX);
     RSDK.SetDrawGroupProperties(3, false, UFO_Setup_DrawHook_PrepareDrawingFX);
-    RSDK.SetDrawGroupProperties(4, true, StateMachine_None);
+    // MiSTer T1-A: drawGroup 4 (sorted) holds Decoration + Player + Circuit +
+    // Springboard, all sharing the View:Special Scene3D (Create3DScene dedupes
+    // by name hash). The hook resets the scene once per group; UFO_Decoration
+    // now only AddModels (no Prepare/Draw); siblings flush-on-entry; drawGroup
+    // 5's hook drains the trailing decoration tail. See UFO_Decoration_Draw and
+    // the sibling Draw functions for the corresponding edits.
+    RSDK.SetDrawGroupProperties(4, true, UFO_Setup_DrawHook_PrepareDecorScene);
+    RSDK.SetDrawGroupProperties(5, false, UFO_Setup_DrawHook_FlushDecorScene);
 
     UFO_Setup->sfxBlueSphere = RSDK.GetSfx("Special/BlueSphere2.wav");
     UFO_Setup->sfxSSExit     = RSDK.GetSfx("Special/SSExit.wav");
@@ -216,6 +223,31 @@ void UFO_Setup_DrawHook_PrepareDrawingFX(void)
 {
     RSDK.SetClipBounds(0, 0, 0, ScreenInfo->size.x, ScreenInfo->size.y);
     RSDK.SetActivePalette(0, 0, ScreenInfo->size.y);
+}
+
+// MiSTer T1-A: reset the shared View:Special scene before drawGroup 4 entities
+// run. UFO_Decoration_Draw only AddModels (no Prepare/Draw of its own) so
+// decorations accumulate into the scene; sibling UFO_Player/Circuit/Springboard
+// Draws call Draw3DScene at entry to flush whatever decorations have queued up
+// to that depth, then run their own Prepare/Add/Draw on top. The end-of-tail
+// is drained by UFO_Setup_DrawHook_FlushDecorScene at drawGroup 5 entry.
+void UFO_Setup_DrawHook_PrepareDecorScene(void)
+{
+    if (UFO_Decoration)
+        RSDK.Prepare3DScene(UFO_Decoration->sceneIndex);
+}
+
+// MiSTer T1-A: drain trailing decorations that sort closer than the last
+// Player/Circuit/Springboard in drawGroup 4. drawGroup 4 is sorted descending
+// by zdepth so any decoration with zdepth less than every sibling has no
+// sibling-flush-on-entry after it; we flush here at drawGroup 5 entry, which
+// fires unconditionally regardless of drawGroup 5's entityCount. Draw3DScene
+// is a no-op when faceCount==0, so this is safe even if every decoration was
+// already flushed by a sibling.
+void UFO_Setup_DrawHook_FlushDecorScene(void)
+{
+    if (UFO_Decoration)
+        RSDK.Draw3DScene(UFO_Decoration->sceneIndex);
 }
 
 void UFO_Setup_Scanline_Playfield(ScanlineInfo *scanlines)

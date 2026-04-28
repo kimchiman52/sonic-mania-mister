@@ -61,6 +61,13 @@ void UFO_Setup_Serialize(void);
 
 // Extra Entity Functions
 void UFO_Setup_DrawHook_PrepareDrawingFX(void);
+// MiSTer T1-A: drawGroup 4 hookCB resets the shared View:Special scene so all
+// drawGroup 4 entities can accumulate verts into one batched Prepare/Draw cycle
+// instead of each running their own. drawGroup 5 hookCB drains the trailing
+// decoration tail (entries that sort closer than the last Player/Circuit/
+// Springboard and thus have no flush-on-entry sibling after them).
+void UFO_Setup_DrawHook_PrepareDecorScene(void);
+void UFO_Setup_DrawHook_FlushDecorScene(void);
 void UFO_Setup_Scanline_Playfield(ScanlineInfo *scanlines);
 void UFO_Setup_Scanline_3DFloor(ScanlineInfo *scanlines);
 void UFO_Setup_Scanline_3DRoof(ScanlineInfo *scanlines);

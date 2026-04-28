@@ -46,6 +46,9 @@ void UFO_Circuit_Draw(void)
     RSDK_THIS(UFO_Circuit);
 
     if (self->zdepth >= 0x4000) {
+        // MiSTer T1-A: flush queued decorations in shared View:Special scene
+        // before Prepare resets it. No-op when faceCount==0.
+        RSDK.Draw3DScene(UFO_Circuit->sceneIndex);
         RSDK.Prepare3DScene(UFO_Circuit->sceneIndex);
 
         RSDK.MatrixScaleXYZ(&self->matTransform, 0x200, 0x200, 0x200);

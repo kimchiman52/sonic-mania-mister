@@ -53,8 +53,9 @@ void UFO_Decoration_Draw(void)
     RSDK_THIS(UFO_Decoration);
 
     if (self->zdepth >= 0x4000) {
-        RSDK.Prepare3DScene(UFO_Decoration->sceneIndex);
-
+        // MiSTer T1-A: batched. drawGroup 4's hookCB calls Prepare3DScene once
+        // per group; sibling Player/Circuit/Springboard Draws flush-on-entry;
+        // drawGroup 5's hookCB drains the trailing tail. We only AddModel.
         RSDK.MatrixScaleXYZ(&self->matTransform, self->scale.x, self->size, self->scale.x);
         RSDK.MatrixTranslateXYZ(&self->matTransform, self->position.x, self->height, self->position.y, 0);
 
@@ -73,8 +74,6 @@ void UFO_Decoration_Draw(void)
         else
             RSDK.AddMeshFrameTo3DScene(UFO_Decoration->modelIndices[self->type], UFO_Decoration->sceneIndex, &self->animator,
                                        UFO_Decoration->drawType, &self->matWorld, &self->matNormal, 0xFFFFFF);
-
-        RSDK.Draw3DScene(UFO_Decoration->sceneIndex);
     }
 }
 

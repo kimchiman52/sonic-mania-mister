@@ -40,6 +40,9 @@ void UFO_Player_Draw(void)
     RSDK_THIS(UFO_Player);
 
     if (self->zdepth >= 1) {
+        // MiSTer T1-A: flush any decorations queued behind us in the shared
+        // View:Special scene before Prepare resets it. No-op when faceCount==0.
+        RSDK.Draw3DScene(UFO_Player->sceneIndex);
         RSDK.Prepare3DScene(UFO_Player->sceneIndex);
 
         int32 anim = self->animator.animationID;
