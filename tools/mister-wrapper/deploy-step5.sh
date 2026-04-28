@@ -160,6 +160,36 @@ else
 fi
 REMOTE_INI
 
+# Ensure /media/fat/games/sonic-mania/Settings.ini has a username under [Game]
+# so the in-game leaderboards / save menus show "MiSTer FPGA" instead of the
+# RSDKv5 default placeholder "IntegerGeorge802" (hardcoded fallback at
+# DummyStorage.cpp:32-37 and APICallback.c:723). UserCore reads
+# customSettings.username from "Game:username" at boot and overrides the
+# default if non-empty. Idempotent: only injects if no username= line exists,
+# so a user-customized value (e.g. their gamertag) is preserved across
+# subsequent deploys.
+ssh_remote 'bash -s' <<'REMOTE_USERNAME'
+INI=/media/fat/games/sonic-mania/Settings.ini
+USERNAME="MiSTer FPGA"
+
+if [ ! -f "$INI" ]; then
+    echo "Settings.ini: not present yet (engine creates on first run); skipping username inject"
+elif grep -qi "^username=" "$INI" 2>/dev/null; then
+    echo "Settings.ini: username= already set (not modified)"
+elif grep -qi "^\[Game\]" "$INI" 2>/dev/null; then
+    sed -i "/^\[Game\]/a username=${USERNAME}" "$INI"
+    echo "Settings.ini: injected username=${USERNAME} under [Game]"
+else
+    # No [Game] section — prepend one. iniparser is forgiving about extra
+    # blank lines so this is safe.
+    {
+        printf '[Game]\nusername=%s\n\n' "$USERNAME"
+        cat "$INI"
+    } > "${INI}.new" && mv "${INI}.new" "$INI"
+    echo "Settings.ini: created [Game] section with username=${USERNAME}"
+fi
+REMOTE_USERNAME
+
 echo "== deploy complete =="
 echo "Next: boot 'Sonic Mania' from MiSTer _Other/ menu. Then SSH in and run:"
 echo "    /media/fat/games/sonic-mania/test-frame-writer bars &"
