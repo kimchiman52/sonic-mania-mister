@@ -11,13 +11,14 @@
 #   WORK_DIR                build/mister-release
 #
 # Outputs:
-#   ${WORK_DIR}/stage/...                           (FAT-rooted staging tree)
-#   ${WORK_DIR}/sonic-mania-mister-<DATE>/...       (dated copy for direct inspection)
-#   ${WORK_DIR}/sonic-mania-mister-<DATE>.zip       (release ZIP)
-#   ${WORK_DIR}/sonic-mania-mister-<DATE>.zip.sha256
+#   ${WORK_DIR}/stage/...                              (FAT-rooted staging tree)
+#   ${WORK_DIR}/sonic-mania-mister-<VERSION>/...       (versioned copy for direct inspection)
+#   ${WORK_DIR}/sonic-mania-mister-<VERSION>.zip       (release ZIP)
+#   ${WORK_DIR}/sonic-mania-mister-<VERSION>.zip.sha256
 #
-# Per project-release-naming.md, the date stamp uses ISO-8601 (YYYY-MM-DD).
-# No version number anywhere in the artifact name.
+# Release artifacts are versioned (semver-ish, no leading "v"). Override
+# the version with RELEASE_VERSION=… or --version <x.y.z>. Default tracks
+# the current in-progress release; bump it when shipping.
 #
 # Per feedback-always-telemetry.md, the default flavor is `clean` (player
 # release). Dev iteration with telemetry binaries works by overriding
@@ -51,8 +52,8 @@ CORE_RBF_169="${CORE_RBF_169:-${CORE_RBF:-${ROOT_DIR}/build/mister-wrapper-core/
 CORE_RBF_43="${CORE_RBF_43:-${ROOT_DIR}/build/mister-wrapper-core/Sonic_Mania_43.rbf}"
 WORK_DIR="${WORK_DIR:-${ROOT_DIR}/build/mister-release}"
 STAGE_DIR="${STAGE_DIR:-${WORK_DIR}/stage}"
-RELEASE_DATE="${RELEASE_DATE:-$(date -u +%Y-%m-%d)}"
-RELEASE_NAME="sonic-mania-mister-${RELEASE_DATE}"
+RELEASE_VERSION="${RELEASE_VERSION:-0.1.0}"
+RELEASE_NAME="sonic-mania-mister-${RELEASE_VERSION}"
 DATED_DIR="${DATED_DIR:-${WORK_DIR}/${RELEASE_NAME}}"
 OUTPUT_ZIP="${OUTPUT_ZIP:-${WORK_DIR}/${RELEASE_NAME}.zip}"
 README_BASENAME="README.txt"
@@ -73,7 +74,8 @@ Options:
   --work-dir <dir>                Working dir for stage / dated tree / zip
   --stage-dir <dir>               FAT-rooted staging directory
   --output-zip <file>             Final FAT-rooted release zip path
-  --skip-zip                      Stop after producing the dated tree (no zip)
+  --version <x.y.z>               Release version stamped into artifact name (default ${RELEASE_VERSION})
+  --skip-zip                      Stop after producing the versioned tree (no zip)
   --help                          Show this help
 
 Defaults:
@@ -85,14 +87,16 @@ Defaults:
   stage_dir=${STAGE_DIR}
   dated_dir=${DATED_DIR}
   output_zip=${OUTPUT_ZIP}
+  release_version=${RELEASE_VERSION}
 
 Notes:
   - Default flavor is clean (ENABLE_PERF_TELEMETRY=OFF). For dev iteration
     with telemetry binaries, run with:
       RUNTIME_INSTALL_PREFIX=build/mister-telemetry-install bash $0
-  - Quartus RBF is NEVER auto-built. If --core-rbf is missing, the script
-    exits with a specific error.
-  - Releases use ISO-8601 dates only (no version numbers).
+  - Quartus RBF is NEVER auto-built. If --core-rbf-169 / --core-rbf-43 is
+    missing, the script exits with a specific error.
+  - Releases use semver-ish version numbers (no leading "v"). Bump
+    RELEASE_VERSION (or pass --version) when shipping.
 EOF
 }
 
@@ -112,6 +116,12 @@ while [ "$#" -gt 0 ]; do
     --hps-binary) HPS_BINARY="$2"; shift 2 ;;
     --core-rbf|--core-rbf-169) CORE_RBF_169="$2"; shift 2 ;;
     --core-rbf-43) CORE_RBF_43="$2"; shift 2 ;;
+    --version)
+        RELEASE_VERSION="$2"
+        RELEASE_NAME="sonic-mania-mister-${RELEASE_VERSION}"
+        DATED_DIR="${WORK_DIR}/${RELEASE_NAME}"
+        OUTPUT_ZIP="${WORK_DIR}/${RELEASE_NAME}.zip"
+        shift 2 ;;
     --work-dir)
         WORK_DIR="$2"
         STAGE_DIR="${WORK_DIR}/stage"
@@ -328,8 +338,9 @@ if [ "${check_only}" -eq 1 ]; then
     echo "core_rbf_169=${CORE_RBF_169}"
     echo "core_rbf_43=${CORE_RBF_43}"
     echo "stage_dir=${STAGE_DIR}"
-    echo "dated_dir=${DATED_DIR}"
+    echo "release_dir=${DATED_DIR}"
     echo "output_zip=${OUTPUT_ZIP}"
+    echo "release_version=${RELEASE_VERSION}"
     exit 0
 fi
 
@@ -348,4 +359,4 @@ fi
 
 echo "release_stage=${STAGE_DIR}"
 echo "release_dir=${DATED_DIR}"
-echo "release_date=${RELEASE_DATE}"
+echo "release_version=${RELEASE_VERSION}"
