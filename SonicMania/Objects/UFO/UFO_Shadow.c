@@ -31,7 +31,11 @@ void UFO_Shadow_LateUpdate(void)
 
             self->zdepth = mat->values[2][3] + (z * mat->values[2][2] >> 8) + (x * mat->values[2][0] >> 8);
 
-            if (self->zdepth >= 0x4000) {
+            // MiSTer: lowered close-cull from 0x4000 to 0x100 to stop shadows
+            // popping out of view when the player approached close — they
+            // would still be inside the visible FOV, just close to the
+            // camera plane. Matches UFO_Sphere / UFO_Ring threshold.
+            if (self->zdepth >= 0x100) {
                 self->visible =
                     abs((int32)((mat->values[0][3] << 8) + ((z * mat->values[0][2]) & 0xFFFFFF00) + ((x * mat->values[0][0]) & 0xFFFFFF00))
                         / self->zdepth)
@@ -50,7 +54,7 @@ void UFO_Shadow_Draw(void)
 {
     RSDK_THIS(UFO_Shadow);
 
-    if (self->zdepth >= 0x4000) {
+    if (self->zdepth >= 0x100) {
         RSDK.MatrixScaleXYZ(&self->matrix, self->shadowScale, 0x100, self->shadowScale);
         RSDK.MatrixTranslateXYZ(&self->matrix, self->position.x, 0, self->position.y, 0);
         RSDK.MatrixMultiply(&self->matrix, &self->matrix, &UFO_Camera->matWorld);
