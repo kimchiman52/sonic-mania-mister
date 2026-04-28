@@ -31,6 +31,14 @@ The pre-packaged release (when available) handles all four steps automatically.
 
 > **FTP users:** if transferring files via FileZilla or another FTP client, set the transfer type to **Binary** (not Auto or ASCII). The default mode corrupts extensionless binaries like `MiSTer_SonicMania` and `RSDKv5U`, causing the core to crash on launch.
 
+## Plus DLC (Mighty, Ray, Encore Mode)
+
+The pre-built binaries we ship are **Plus-disabled**, following the upstream RSDKModding decompilation's distribution policy ([their README](https://github.com/RSDKModding/Sonic-Mania-Decompilation#:~:text=RETRO_DISABLE_PLUS): *"build with `on` when compiling for distribution"*). Encore Mode, Mighty, Ray, and the other Plus-only menu options will not appear, regardless of whether your `Data.rsdk` is from the Plus edition. This is intentional — it keeps the redistributable build aligned with the project's "do not facilitate piracy of Plus content" stance.
+
+If you legitimately own *Sonic Mania Plus* and want to play with Plus content on the MiSTer, you'll need to build the **game binary** yourself with `RETRO_DISABLE_PLUS=off`. The Plus flag only affects the engine/game source — the **HPS wrapper** (`MiSTer_SonicMania`) and **FPGA core** (`Sonic_Mania*.rbf`) are *not* affected and do **not** need to be rebuilt. You can keep using the wrapper and RBFs from a release ZIP and just drop in your own self-built `RSDKv5U`.
+
+See [docs/building-mister.md](docs/building-mister.md) for the engine-binary build pipeline (Docker armhf cross-compile, ~2 min). The painful 75–90 min Quartus FPGA build is *not* required for Plus. **Do not redistribute** Plus-enabled binaries — that breaks the upstream policy and ours.
+
 ## Known issues
 
 **UFO Special Stage decorations are hidden.** Trees, flowers, pillars, birds, and fish are skipped in the Special Stage minigames so the Cortex-A9 can sustain 60 Hz — they were costing ~22 ms peak on a 16.6 ms budget. Gameplay impact is zero (no collision, no state machine in upstream Mania either); the world just looks emptier. Reversible by dropping the `#if defined(RSDK_USE_MISTER) return;` guards in `SonicMania/Objects/UFO/UFO_Decoration.c`.
