@@ -9,8 +9,21 @@
 
 ObjectUFO_Decoration *UFO_Decoration;
 
+// MiSTer: UFO_Decoration is pure non-interactive scenery (Tree, Flower1-3,
+// Pillar1-2, Bird, Fish). Verified zero collision / state-machine / gameplay
+// interaction — players run straight through every type without effect. On
+// the HPS Cortex-A9 this single class accounts for ~9 ms avg / ~22 ms peak
+// on UFO Special Stage RASTER (post-T1-A telemetry, run frames=8818). Skip
+// Update/LateUpdate/Draw entirely on MiSTer to recover the budget. The
+// matrix/animator state still gets wired up in _Create so other code can
+// reference these entities by slot if needed; we just don't process them
+// per-frame.
+
 void UFO_Decoration_Update(void)
 {
+#if defined(RSDK_USE_MISTER)
+    return;
+#endif
     RSDK_THIS(UFO_Decoration);
 
     if (RSDK.CheckOnScreen(self, NULL)) {
@@ -28,6 +41,9 @@ void UFO_Decoration_Update(void)
 
 void UFO_Decoration_LateUpdate(void)
 {
+#if defined(RSDK_USE_MISTER)
+    return;
+#endif
     RSDK_THIS(UFO_Decoration);
 
     int32 x = self->position.x;
@@ -55,6 +71,9 @@ void UFO_Decoration_StaticUpdate(void) {}
 
 void UFO_Decoration_Draw(void)
 {
+#if defined(RSDK_USE_MISTER)
+    return;
+#endif
     RSDK_THIS(UFO_Decoration);
 
     if (self->zdepth >= 0x100) {
