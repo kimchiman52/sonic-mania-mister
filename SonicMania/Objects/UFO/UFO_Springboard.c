@@ -9,6 +9,17 @@
 
 ObjectUFO_Springboard *UFO_Springboard;
 
+#if defined(RSDK_USE_MISTER)
+extern void Scene3D_SetDrawSource(uint32 source);
+extern void Scene3D_EnableCachedModelFaceColors(uint16 modelID);
+#define UFO_S3D_SOURCE_DECORATION  1
+#define UFO_S3D_SOURCE_SPRINGBOARD 4
+#define UFO_SPECIAL_SCENE_VERT_LIMIT 0x4000
+#define UFO_SPRINGBOARD_DRAW_TYPE S3D_SOLIDCOLOR_SHADED_SCREEN
+#else
+#define UFO_SPRINGBOARD_DRAW_TYPE S3D_SOLIDCOLOR_SHADED_BLENDED_SCREEN
+#endif
+
 void UFO_Springboard_Update(void)
 {
     RSDK_THIS(UFO_Springboard);
@@ -80,6 +91,9 @@ void UFO_Springboard_Draw(void)
     if (self->zdepth >= 0x4000) {
         // MiSTer T1-A: flush queued decorations in shared View:Special scene
         // before Prepare resets it. No-op when faceCount==0.
+#if defined(RSDK_USE_MISTER)
+        Scene3D_SetDrawSource(UFO_S3D_SOURCE_DECORATION);
+#endif
         RSDK.Draw3DScene(UFO_Springboard->sceneIndex);
         RSDK.Prepare3DScene(UFO_Springboard->sceneIndex);
 
@@ -91,9 +105,12 @@ void UFO_Springboard_Draw(void)
         RSDK.MatrixMultiply(&self->matWorld, &self->matWorld, &UFO_Camera->matWorld);
         RSDK.MatrixMultiply(&self->matNormal, &self->matNormal, &UFO_Camera->matView);
 
-        RSDK.AddMeshFrameTo3DScene(UFO_Springboard->modelIndex, UFO_Springboard->sceneIndex, &self->animator, S3D_SOLIDCOLOR_SHADED_BLENDED_SCREEN,
+        RSDK.AddMeshFrameTo3DScene(UFO_Springboard->modelIndex, UFO_Springboard->sceneIndex, &self->animator, UFO_SPRINGBOARD_DRAW_TYPE,
                                    &self->matWorld, &self->matNormal, 0xFFFFFF);
 
+#if defined(RSDK_USE_MISTER)
+        Scene3D_SetDrawSource(UFO_S3D_SOURCE_SPRINGBOARD);
+#endif
         RSDK.Draw3DScene(UFO_Springboard->sceneIndex);
         // MiSTer T1-A fix: tail-Prepare clears faceCount/vertexCount so any
         // decorations queued between this sibling and the next don't inherit
@@ -118,7 +135,16 @@ void UFO_Springboard_Create(void *data)
 void UFO_Springboard_StageLoad(void)
 {
     UFO_Springboard->modelIndex = RSDK.LoadMesh("Special/Springboard.bin", SCOPE_STAGE);
-    UFO_Springboard->sceneIndex = RSDK.Create3DScene("View:Special", 4096, SCOPE_STAGE);
+#if defined(RSDK_USE_MISTER)
+    Scene3D_EnableCachedModelFaceColors(UFO_Springboard->modelIndex);
+#endif
+    UFO_Springboard->sceneIndex = RSDK.Create3DScene("View:Special",
+#if defined(RSDK_USE_MISTER)
+                                                     UFO_SPECIAL_SCENE_VERT_LIMIT,
+#else
+                                                     4096,
+#endif
+                                                     SCOPE_STAGE);
 }
 
 #if GAME_INCLUDE_EDITOR

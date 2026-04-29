@@ -9,6 +9,11 @@
 
 ObjectUFO_Setup *UFO_Setup;
 
+#if defined(RSDK_USE_MISTER)
+extern void Scene3D_SetDrawSource(uint32 source);
+#define UFO_S3D_SOURCE_DECORATION 1
+#endif
+
 // Per-frame reciprocal cache shared across the three UFO_Setup_Scanline_*
 // callbacks. Built lazily by whichever callback runs first in a frame and
 // observes a cache miss; reused by the other two. Cache key is angleX only:
@@ -102,7 +107,10 @@ void UFO_Setup_StageLoad(void)
     UFO_Setup->timedOut     = 0;
     UFO_Setup->resetToTitle = false;
 
-    RSDK.GetTileLayer(UFO_Setup->playFieldLayer)->scanlineCallback = UFO_Setup_Scanline_Playfield;
+    TileLayer *playField = RSDK.GetTileLayer(UFO_Setup->playFieldLayer);
+    if (playField) {
+        playField->scanlineCallback = UFO_Setup_Scanline_Playfield;
+    }
 
     RSDK.SetDrawGroupProperties(1, false, UFO_Setup_DrawHook_PrepareDrawingFX);
     RSDK.SetDrawGroupProperties(3, false, UFO_Setup_DrawHook_PrepareDrawingFX);
@@ -233,6 +241,11 @@ void UFO_Setup_DrawHook_PrepareDrawingFX(void)
 // is drained by UFO_Setup_DrawHook_FlushDecorScene at drawGroup 5 entry.
 void UFO_Setup_DrawHook_PrepareDecorScene(void)
 {
+#if defined(RSDK_USE_MISTER)
+    if (UFO_Shadow)
+        UFO_Shadow_FlushBatch();
+#endif
+
     if (UFO_Decoration)
         RSDK.Prepare3DScene(UFO_Decoration->sceneIndex);
 }
@@ -246,8 +259,15 @@ void UFO_Setup_DrawHook_PrepareDecorScene(void)
 // already flushed by a sibling.
 void UFO_Setup_DrawHook_FlushDecorScene(void)
 {
-    if (UFO_Decoration)
+    if (UFO_Decoration) {
+#if defined(RSDK_USE_MISTER)
+        Scene3D_SetDrawSource(UFO_S3D_SOURCE_DECORATION);
+#endif
         RSDK.Draw3DScene(UFO_Decoration->sceneIndex);
+#if defined(RSDK_USE_MISTER)
+        RSDK.Prepare3DScene(UFO_Decoration->sceneIndex);
+#endif
+    }
 }
 
 void UFO_Setup_Scanline_Playfield(ScanlineInfo *scanlines)
@@ -339,10 +359,9 @@ void UFO_Setup_Scanline_3DRoof(ScanlineInfo *scanlines)
 
     RSDK.SetClipBounds(0, 0, 0, ScreenInfo->size.x, camera->clipY - 48);
 
-    // Phase 11 perf: when the roof clip region is empty, the tile layer renders
-    // zero rows; setting up the 240 scanline entries (and 240 SetActivePalette
-    // calls) is wasted work. SetClipBounds is preserved above so the screen-wide
-    // clip state is still correct for this layer.
+    // When the roof clip region is empty, the tile layer renders zero rows.
+    // SetClipBounds is preserved above so the screen-wide clip state is still
+    // correct for this layer.
     if (camera->clipY <= 48)
         return;
 

@@ -9,6 +9,14 @@
 
 ObjectUFO_Shadow *UFO_Shadow;
 
+#if defined(RSDK_USE_MISTER)
+extern void Scene3D_SetDrawSource(uint32 source);
+#define UFO_S3D_SOURCE_SHADOW 5
+#define UFO_SPECIAL_SCENE_VERT_LIMIT 0x4000
+static bool32 s_shadowBatchPrepared;
+static Entity *s_shadowBatchEntity;
+#endif
+
 void UFO_Shadow_Update(void) {}
 
 void UFO_Shadow_LateUpdate(void)
@@ -48,7 +56,30 @@ void UFO_Shadow_LateUpdate(void)
     }
 }
 
-void UFO_Shadow_StaticUpdate(void) {}
+void UFO_Shadow_StaticUpdate(void)
+{
+#if defined(RSDK_USE_MISTER)
+    s_shadowBatchPrepared = false;
+    s_shadowBatchEntity   = NULL;
+#endif
+}
+
+#if defined(RSDK_USE_MISTER)
+void UFO_Shadow_FlushBatch(void)
+{
+    if (!s_shadowBatchPrepared || !s_shadowBatchEntity)
+        return;
+
+    Entity *store = SceneInfo->entity;
+    SceneInfo->entity = s_shadowBatchEntity;
+    Scene3D_SetDrawSource(UFO_S3D_SOURCE_SHADOW);
+    RSDK.Draw3DScene(UFO_Shadow->sceneID);
+    SceneInfo->entity = store;
+
+    s_shadowBatchPrepared = false;
+    s_shadowBatchEntity   = NULL;
+}
+#endif
 
 void UFO_Shadow_Draw(void)
 {
@@ -59,9 +90,21 @@ void UFO_Shadow_Draw(void)
         RSDK.MatrixTranslateXYZ(&self->matrix, self->position.x, 0, self->position.y, 0);
         RSDK.MatrixMultiply(&self->matrix, &self->matrix, &UFO_Camera->matWorld);
 
+#if defined(RSDK_USE_MISTER)
+        if (!s_shadowBatchPrepared) {
+            RSDK.Prepare3DScene(UFO_Shadow->sceneID);
+            s_shadowBatchPrepared = true;
+            s_shadowBatchEntity   = (Entity *)self;
+        }
+#else
         RSDK.Prepare3DScene(UFO_Shadow->sceneID);
+#endif
         RSDK.AddModelTo3DScene(UFO_Shadow->modelIndex, UFO_Shadow->sceneID, S3D_SOLIDCOLOR_SCREEN, &self->matrix, 0, 0);
+#if defined(RSDK_USE_MISTER)
+        Scene3D_SetDrawSource(UFO_S3D_SOURCE_SHADOW);
+#else
         RSDK.Draw3DScene(UFO_Shadow->sceneID);
+#endif
     }
 }
 
@@ -83,7 +126,13 @@ void UFO_Shadow_Create(void *data)
 void UFO_Shadow_StageLoad(void)
 {
     UFO_Shadow->modelIndex = RSDK.LoadMesh("Special/Shadow.bin", SCOPE_STAGE);
-    UFO_Shadow->sceneID    = RSDK.Create3DScene("View:Special", 4096, SCOPE_STAGE);
+    UFO_Shadow->sceneID    = RSDK.Create3DScene("View:Special",
+#if defined(RSDK_USE_MISTER)
+                                                UFO_SPECIAL_SCENE_VERT_LIMIT,
+#else
+                                                4096,
+#endif
+                                                SCOPE_STAGE);
 
     int32 slot = TEMPENTITY_START;
     foreach_all(UFO_Player, player)

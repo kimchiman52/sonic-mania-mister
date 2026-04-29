@@ -9,6 +9,17 @@
 
 ObjectUFO_Circuit *UFO_Circuit;
 
+#if defined(RSDK_USE_MISTER)
+extern void Scene3D_SetDrawSource(uint32 source);
+extern void Scene3D_EnableCachedModelFaceColors(uint16 modelID);
+#define UFO_S3D_SOURCE_DECORATION 1
+#define UFO_S3D_SOURCE_CIRCUIT    3
+#define UFO_SPECIAL_SCENE_VERT_LIMIT 0x4000
+#define UFO_CIRCUIT_DRAW_TYPE S3D_SOLIDCOLOR_SHADED_SCREEN
+#else
+#define UFO_CIRCUIT_DRAW_TYPE S3D_SOLIDCOLOR_SHADED_BLENDED_SCREEN
+#endif
+
 void UFO_Circuit_Update(void)
 {
     RSDK_THIS(UFO_Circuit);
@@ -48,6 +59,9 @@ void UFO_Circuit_Draw(void)
     if (self->zdepth >= 0x4000) {
         // MiSTer T1-A: flush queued decorations in shared View:Special scene
         // before Prepare resets it. No-op when faceCount==0.
+#if defined(RSDK_USE_MISTER)
+        Scene3D_SetDrawSource(UFO_S3D_SOURCE_DECORATION);
+#endif
         RSDK.Draw3DScene(UFO_Circuit->sceneIndex);
         RSDK.Prepare3DScene(UFO_Circuit->sceneIndex);
 
@@ -59,11 +73,14 @@ void UFO_Circuit_Draw(void)
         RSDK.MatrixMultiply(&self->matWorld, &self->matWorld, &UFO_Camera->matWorld);
         RSDK.MatrixMultiply(&self->matNormal, &self->matNormal, &UFO_Camera->matView);
 
-        RSDK.AddMeshFrameTo3DScene(self->ufoAnimator.animationID, UFO_Circuit->sceneIndex, &self->ufoAnimator, S3D_SOLIDCOLOR_SHADED_BLENDED_SCREEN,
+        RSDK.AddMeshFrameTo3DScene(self->ufoAnimator.animationID, UFO_Circuit->sceneIndex, &self->ufoAnimator, UFO_CIRCUIT_DRAW_TYPE,
                                    &self->matWorld, &self->matNormal, 0xFFFFFF);
-        RSDK.AddMeshFrameTo3DScene(UFO_Circuit->emeraldModel, UFO_Circuit->sceneIndex, &self->ufoAnimator, S3D_SOLIDCOLOR_SHADED_BLENDED_SCREEN,
+        RSDK.AddMeshFrameTo3DScene(UFO_Circuit->emeraldModel, UFO_Circuit->sceneIndex, &self->ufoAnimator, UFO_CIRCUIT_DRAW_TYPE,
                                    &self->matWorld, &self->matNormal, 0xFFFFFF);
 
+#if defined(RSDK_USE_MISTER)
+        Scene3D_SetDrawSource(UFO_S3D_SOURCE_CIRCUIT);
+#endif
         RSDK.Draw3DScene(UFO_Circuit->sceneIndex);
         // MiSTer T1-A fix: tail-Prepare clears faceCount/vertexCount so any
         // decorations queued between this sibling and the next don't inherit
@@ -139,7 +156,18 @@ void UFO_Circuit_StageLoad(void)
         default: UFO_Circuit->emeraldModel = RSDK.LoadMesh("Special/EmeraldGreen.bin", SCOPE_STAGE); break;
     }
 
-    UFO_Circuit->sceneIndex = RSDK.Create3DScene("View:Special", 4096, SCOPE_STAGE);
+#if defined(RSDK_USE_MISTER)
+    Scene3D_EnableCachedModelFaceColors(UFO_Circuit->ufoModel);
+    Scene3D_EnableCachedModelFaceColors(UFO_Circuit->emeraldModel);
+#endif
+
+    UFO_Circuit->sceneIndex = RSDK.Create3DScene("View:Special",
+#if defined(RSDK_USE_MISTER)
+                                                 UFO_SPECIAL_SCENE_VERT_LIMIT,
+#else
+                                                 4096,
+#endif
+                                                 SCOPE_STAGE);
 
     UFO_Circuit->nodeCount = 0;
     foreach_all(UFO_Circuit, node) { UFO_Circuit->nodeCount++; }

@@ -9,6 +9,18 @@
 
 ObjectUFO_Player *UFO_Player;
 
+#if defined(RSDK_USE_MISTER)
+extern void Scene3D_SetDrawSource(uint32 source);
+extern void Scene3D_EnableCachedModelFaceColors(uint16 modelID);
+extern void Scene3D_EnableSkipModelNormals(uint16 modelID);
+#define UFO_S3D_SOURCE_DECORATION 1
+#define UFO_S3D_SOURCE_PLAYER     2
+#define UFO_SPECIAL_SCENE_VERT_LIMIT 0x4000
+#define UFO_PLAYER_DRAW_TYPE S3D_SOLIDCOLOR_SHADED_SCREEN
+#else
+#define UFO_PLAYER_DRAW_TYPE S3D_SOLIDCOLOR_SHADED_BLENDED_SCREEN
+#endif
+
 void UFO_Player_Update(void)
 {
     RSDK_THIS(UFO_Player);
@@ -42,6 +54,9 @@ void UFO_Player_Draw(void)
     if (self->zdepth >= 1) {
         // MiSTer T1-A: flush any decorations queued behind us in the shared
         // View:Special scene before Prepare resets it. No-op when faceCount==0.
+#if defined(RSDK_USE_MISTER)
+        Scene3D_SetDrawSource(UFO_S3D_SOURCE_DECORATION);
+#endif
         RSDK.Draw3DScene(UFO_Player->sceneIndex);
         RSDK.Prepare3DScene(UFO_Player->sceneIndex);
 
@@ -57,10 +72,7 @@ void UFO_Player_Draw(void)
             RSDK.MatrixMultiply(&self->matWorld, &self->matWorld, &UFO_Camera->matWorld);
             RSDK.MatrixMultiply(&self->matNormal, &self->matNormal, &UFO_Camera->matView);
 
-            // MiSTer T1-C: gouraud (per-vertex) -> flat (per-face) shade.
-            // Saves 1.5-3 ms on the fattest single entity in UFO peak; visual
-            // cost is loss of smooth gradient across the player model.
-            RSDK.AddModelTo3DScene(self->animator.animationID, UFO_Player->sceneIndex, S3D_SOLIDCOLOR_SHADED_SCREEN, &self->matWorld,
+            RSDK.AddModelTo3DScene(self->animator.animationID, UFO_Player->sceneIndex, UFO_PLAYER_DRAW_TYPE, &self->matWorld,
                                    &self->matNormal, 0xFFFFFF);
         }
         else {
@@ -75,11 +87,13 @@ void UFO_Player_Draw(void)
             RSDK.MatrixRotateXYZ(&self->matNormal, 0, self->angle, 0);
             RSDK.MatrixMultiply(&self->matNormal, &self->matNormal, &UFO_Camera->matView);
 
-            // MiSTer T1-C: gouraud (per-vertex) -> flat (per-face) shade.
-            RSDK.AddMeshFrameTo3DScene(self->animator.animationID, UFO_Player->sceneIndex, &self->animator, S3D_SOLIDCOLOR_SHADED_SCREEN,
+            RSDK.AddMeshFrameTo3DScene(self->animator.animationID, UFO_Player->sceneIndex, &self->animator, UFO_PLAYER_DRAW_TYPE,
                                        &self->matWorld, &self->matNormal, 0xFFFFFF);
         }
 
+#if defined(RSDK_USE_MISTER)
+        Scene3D_SetDrawSource(UFO_S3D_SOURCE_PLAYER);
+#endif
         RSDK.Draw3DScene(UFO_Player->sceneIndex);
         // MiSTer T1-A fix: tail-Prepare clears faceCount/vertexCount so any
         // decorations queued between this sibling and the next don't inherit
@@ -194,7 +208,26 @@ void UFO_Player_StageLoad(void)
 #endif
     }
 
-    UFO_Player->sceneIndex = RSDK.Create3DScene("View:Special", 4096, SCOPE_STAGE);
+#if defined(RSDK_USE_MISTER)
+    Scene3D_EnableCachedModelFaceColors(UFO_Player->jogModel);
+    Scene3D_EnableCachedModelFaceColors(UFO_Player->dashModel);
+    Scene3D_EnableCachedModelFaceColors(UFO_Player->jumpModel);
+    Scene3D_EnableCachedModelFaceColors(UFO_Player->ballModel);
+    Scene3D_EnableCachedModelFaceColors(UFO_Player->tumbleModel);
+    Scene3D_EnableSkipModelNormals(UFO_Player->jogModel);
+    Scene3D_EnableSkipModelNormals(UFO_Player->dashModel);
+    Scene3D_EnableSkipModelNormals(UFO_Player->jumpModel);
+    Scene3D_EnableSkipModelNormals(UFO_Player->ballModel);
+    Scene3D_EnableSkipModelNormals(UFO_Player->tumbleModel);
+#endif
+
+    UFO_Player->sceneIndex = RSDK.Create3DScene("View:Special",
+#if defined(RSDK_USE_MISTER)
+                                                UFO_SPECIAL_SCENE_VERT_LIMIT,
+#else
+                                                4096,
+#endif
+                                                SCOPE_STAGE);
 
     RSDK.SetDiffuseColor(UFO_Player->sceneIndex, 0xA0, 0xA0, 0xA0);
     RSDK.SetDiffuseIntensity(UFO_Player->sceneIndex, 8, 8, 8);

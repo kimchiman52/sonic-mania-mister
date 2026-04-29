@@ -9,6 +9,11 @@
 
 ObjectUFO_ItemBox *UFO_ItemBox;
 
+#if defined(RSDK_USE_MISTER)
+extern void Scene3D_SetDrawSource(uint32 source);
+#define UFO_S3D_SOURCE_ITEMBOX 6
+#endif
+
 void UFO_ItemBox_Update(void)
 {
     RSDK_THIS(UFO_ItemBox);
@@ -67,6 +72,9 @@ void UFO_ItemBox_Draw(void)
         RSDK.AddModelTo3DScene(UFO_ItemBox->meshFrames, UFO_ItemBox->sceneIndex, S3D_WIREFRAME_SHADED_SCREEN, &self->matWorld, &self->matNormal,
                                0xFFFF00);
 
+#if defined(RSDK_USE_MISTER)
+        Scene3D_SetDrawSource(UFO_S3D_SOURCE_ITEMBOX);
+#endif
         RSDK.Draw3DScene(UFO_ItemBox->sceneIndex);
 
         self->drawPos.x = (ScreenInfo->center.x + (self->worldX << 8) / self->zdepth) << 16;

@@ -541,6 +541,7 @@ typedef struct {
     int32 deformationData[0x400];
     int32 deformationDataW[0x400];
     void (*scanlineCallback)(ScanlineInfo *);
+    bool32 solidRotozoomRuns;
     uint16 scrollInfoCount;
     ScrollInfo scrollInfo[0x100];
     uint32 name[4];

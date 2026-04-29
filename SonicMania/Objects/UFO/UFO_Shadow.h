@@ -36,5 +36,8 @@ void UFO_Shadow_EditorLoad(void);
 void UFO_Shadow_Serialize(void);
 
 // Extra Entity Functions
+#if defined(RSDK_USE_MISTER)
+void UFO_Shadow_FlushBatch(void);
+#endif
 
 #endif //! OBJ_UFO_SHADOW_H
