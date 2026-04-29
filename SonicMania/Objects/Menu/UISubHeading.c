@@ -9,6 +9,25 @@
 
 ObjectUISubHeading *UISubHeading;
 
+#if defined(RSDK_USE_MISTER)
+// Tester escape hatch: when SONIC_MANIA_FORCE_DEBUG=1 is set in the
+// environment (e.g. via run-mania.sh), force-open the Level Select scene
+// on any save start regardless of upstream's Debug-Mode-bit + button-hold
+// + No-Save-slot conditions. Cached after the first call so we don't
+// re-getenv every save action. Default off; player-release behavior
+// unchanged.
+static bool32 UISubHeading_MiSTerForceDebug(void)
+{
+    static bool32 checked, active;
+    if (!checked) {
+        const char *f = getenv("SONIC_MANIA_FORCE_DEBUG");
+        active        = (f && *f && *f != '0' && *f != 'n' && *f != 'N' && *f != 'f' && *f != 'F');
+        checked       = true;
+    }
+    return active;
+}
+#endif
+
 void UISubHeading_Update(void)
 {
     RSDK_THIS(UISubHeading);
@@ -376,6 +395,19 @@ void UISubHeading_SaveButton_ActionCB(void)
             globals->playerID |= ID_TAILS_ASSIST;
     }
 
+#if defined(RSDK_USE_MISTER)
+    // SONIC_MANIA_FORCE_DEBUG=1 escape hatch: short-circuit ALL the
+    // upstream save-start branches and route to Level Select. Has to be
+    // outside the (UISAVESLOT_NOSAVE || isNewSave) gate below because an
+    // existing save would fall through to "Mania Mode" / "Encore Mode"
+    // resume otherwise. Lets a tester reach UFO/CPZ from any save slot
+    // without controller-button gymnastics. Default off; player release
+    // behavior unchanged.
+    if (UISubHeading_MiSTerForceDebug()) {
+        RSDK.SetScene("Presentation", "Level Select");
+    }
+    else
+#endif
     if (self->type == UISAVESLOT_NOSAVE || self->isNewSave) {
         if (self->encoreMode) {
             globals->playerID          = ID_SONIC;

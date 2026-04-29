@@ -9,6 +9,22 @@
 
 ObjectMenuSetup *MenuSetup;
 
+#if defined(RSDK_USE_MISTER)
+// Tester escape hatch: mirror of UISubHeading_MiSTerForceDebug. See the
+// comment block there for full context. When SONIC_MANIA_FORCE_DEBUG=1 is
+// set in env, route any save start to Level Select.
+static bool32 MenuSetup_MiSTerForceDebug(void)
+{
+    static bool32 checked, active;
+    if (!checked) {
+        const char *f = getenv("SONIC_MANIA_FORCE_DEBUG");
+        active        = (f && *f && *f != '0' && *f != 'n' && *f != 'N' && *f != 'f' && *f != 'F');
+        checked       = true;
+    }
+    return active;
+}
+#endif
+
 void MenuSetup_Update(void)
 {
     RSDK_THIS(MenuSetup);
@@ -1113,6 +1129,14 @@ void MenuSetup_SaveSlot_ActionCB(void)
     else if (!self->frameID)
         globals->playerID |= ID_TAILS_ASSIST;
 
+#if defined(RSDK_USE_MISTER)
+    // SONIC_MANIA_FORCE_DEBUG=1 escape hatch -- mirror of UISubHeading.
+    // Outside the slot-type gate so an existing save also reroutes to
+    // Level Select instead of falling through to "Mania Mode" resume.
+    if (MenuSetup_MiSTerForceDebug())
+        RSDK.SetScene("Presentation", "Level Select");
+    else
+#endif
     if (self->type == UISAVESLOT_NOSAVE || self->isNewSave) {
         if (((globals->medalMods & MEDAL_DEBUGMODE) && (ControllerInfo->keyC.down || ControllerInfo->keyX.down))
             && self->type == UISAVESLOT_NOSAVE)

@@ -499,7 +499,23 @@ bool32 GameProgress_CheckUnlock(uint8 id)
 
             case GAMEPROGRESS_UNLOCK_ANDKNUX: return progress->silverMedalCount >= 11;
 
-            case GAMEPROGRESS_UNLOCK_DEBUGMODE: return progress->silverMedalCount >= 16;
+            case GAMEPROGRESS_UNLOCK_DEBUGMODE:
+#if defined(RSDK_USE_MISTER)
+            {
+                // MiSTer-only test escape hatch: set env var
+                // SONIC_MANIA_FORCE_DEBUG=1 (e.g. via run-mania.sh) to make
+                // Debug Mode + Level Select reachable without grinding 16
+                // Silver Medals. Lets testers jump straight to UFO/CPZ/etc
+                // to verify a build. Default off; player release behavior
+                // unchanged. Treat any non-empty value other than "0"/"n"/
+                // "N"/"f"/"F" as truthy so people don't get tripped up by
+                // the exact spelling.
+                const char *force = getenv("SONIC_MANIA_FORCE_DEBUG");
+                if (force && *force && *force != '0' && *force != 'n' && *force != 'N' && *force != 'f' && *force != 'F')
+                    return true;
+            }
+#endif
+                return progress->silverMedalCount >= 16;
 
             case GAMEPROGRESS_UNLOCK_MEANBEAN: return progress->silverMedalCount >= 21;
 

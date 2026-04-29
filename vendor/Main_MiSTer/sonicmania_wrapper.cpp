@@ -2956,6 +2956,14 @@ int sonicmania_wrapper_run(int argc, char *argv[])
 			}
 			child_argv.push_back(nullptr);
 
+			// Tester escape hatch: pass SONIC_MANIA_FORCE_DEBUG=1 through to the
+			// engine if a flag file exists at the standard location. The wrapper
+			// execve()'s the engine binary directly (NOT through run-mania.sh),
+			// so env vars exported in that script are NOT inherited -- inject
+			// here. Default off; only fires if the flag file is present.
+			if (FileExists("/media/fat/games/sonic-mania/.force_debug", 0))
+				setenv("SONIC_MANIA_FORCE_DEBUG", "1", 1);
+
 			execve(kRuntimeBinary, child_argv.data(), environ);
 
 			int exec_errno = errno;

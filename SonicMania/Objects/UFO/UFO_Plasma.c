@@ -80,9 +80,25 @@ void UFO_Plasma_StageLoad(void)
         angle += 2;
     }
 
-    for (int32 b = 0; b < 8; ++b) RSDK.SetPaletteEntry(b, 0xDB, 0x00F000);
+    // The palette-entry stomp (index 0xDB -> pure green) and SetPaletteMask
+    // exist to chroma-key the lightning sprite for INK_MASKED draws on UFO5
+    // (the lightning stage). Upstream runs them unconditionally during
+    // UFO_Plasma_StageLoad, which fires on every UFO scene that has
+    // UFO_Plasma in its object pool -- not just UFO5. On UFO7 the floor's
+    // translucent-blue fill happens to use palette index 0xDB; the stomp
+    // turns those pixels pure green, and the SetPaletteMask makes them
+    // engine-wide transparent (so anything drawn behind the floor flashes
+    // through, producing the "fast flickering green" symptom). Gate the
+    // palette mutation on the UFO5 scene so other UFO stages keep their
+    // intended palette content. The aniFrames load + scanlineList +
+    // ResetEntitySlot + drawGroup-3 prepare hook are still cheap to run on
+    // every UFO stage and are needed for the Plasma object to function on
+    // UFO5; only the palette/mask side effects move under the gate.
+    if (RSDK.CheckSceneFolder("UFO5")) {
+        for (int32 b = 0; b < 8; ++b) RSDK.SetPaletteEntry(b, 0xDB, 0x00F000);
 
-    RSDK.SetPaletteMask(0x00F000);
+        RSDK.SetPaletteMask(0x00F000);
+    }
     RSDK.ResetEntitySlot(SLOT_UFO_PLASMA, UFO_Plasma->classID, NULL);
     RSDK.SetDrawGroupProperties(3, false, StateMachine_None);
 }

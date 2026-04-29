@@ -266,37 +266,20 @@ void UFO_Setup_Scanline_Playfield(ScanlineInfo *scanlines)
     int32 bandStart = 0;
     int32 bandBank  = -1;
 
-    // SS7 floor on MiSTer is an eyesore: the per-scanline palette-bank
-    // switching strobes hard because UFO7's palette has high contrast
-    // between adjacent depth banks. Banks 1-6 are SetLimitedFade
-    // interpolants of bank 0 -> bank 7 across colors 160-255 (see
-    // UFO_Setup_StageLoad lines 126-131); SS7's floor content uses indices
-    // in that range, so the depth-fade boundaries are visible and shift
-    // with the camera, producing the strobe. Force a single bank-0 active
-    // palette across the whole screen on SS7 so the floor renders
-    // flat-bright instead of strobing depth bands.
-#if defined(RSDK_USE_MISTER)
-    bool32 ss7_pin_bank = UFO_Camera->isSS7;
-#else
-    bool32 ss7_pin_bank = false;
-#endif
-
     for (int32 i = -SCREEN_YCENTER; i < SCREEN_YCENTER; ++i) {
         int32 h             = (int32)(((long long)camera->height * ufo_setup_recip_table[i + SCREEN_YCENTER]) >> UFO_SETUP_RECIP_SHIFT);
         scanlines->deform.x = (-cos * h) >> 8;
         scanlines->deform.y = (sin * h) >> 8;
 
         int32 pos  = ((cosX * h) >> 8) - (sinX * ((i * h) >> 8) >> 8);
-        if (!ss7_pin_bank) {
-            int32 bank = CLAMP(abs(pos) >> 15, 0, 7);
-            int32 line = i + SCREEN_YCENTER;
+        int32 bank = CLAMP(abs(pos) >> 15, 0, 7);
+        int32 line = i + SCREEN_YCENTER;
 
-            if (bank != bandBank) {
-                if (bandBank >= 0)
-                    RSDK.SetActivePalette(bandBank, bandStart, line);
-                bandStart = line;
-                bandBank  = bank;
-            }
+        if (bank != bandBank) {
+            if (bandBank >= 0)
+                RSDK.SetActivePalette(bandBank, bandStart, line);
+            bandStart = line;
+            bandBank  = bank;
         }
 
         scanlines->position.x = (sin * pos - ScreenInfo->center.x * scanlines->deform.x) + camera->position.x;
@@ -305,9 +288,7 @@ void UFO_Setup_Scanline_Playfield(ScanlineInfo *scanlines)
         scanlines++;
     }
 
-    if (ss7_pin_bank)
-        RSDK.SetActivePalette(0, 0, SCREEN_YSIZE);
-    else if (bandBank >= 0)
+    if (bandBank >= 0)
         RSDK.SetActivePalette(bandBank, bandStart, SCREEN_YSIZE);
 }
 
@@ -327,29 +308,20 @@ void UFO_Setup_Scanline_3DFloor(ScanlineInfo *scanlines)
     int32 bandStart = 0;
     int32 bandBank  = -1;
 
-    // See Scanline_Playfield above re: SS7 bank-pinning.
-#if defined(RSDK_USE_MISTER)
-    bool32 ss7_pin_bank = UFO_Camera->isSS7;
-#else
-    bool32 ss7_pin_bank = false;
-#endif
-
     for (int32 i = -SCREEN_YCENTER; i < SCREEN_YCENTER; ++i) {
         int32 h             = (int32)(((long long)(camera->height + 0x1000000) * ufo_setup_recip_table[i + SCREEN_YCENTER]) >> UFO_SETUP_RECIP_SHIFT);
         scanlines->deform.x = -(cos * h) >> 8;
         scanlines->deform.y = (sin * h) >> 8;
 
         int32 pos  = ((cosX * h) >> 8) - (sinX * ((i * h) >> 8) >> 8);
-        if (!ss7_pin_bank) {
-            int32 bank = CLAMP((abs(pos) >> 15) - 8, 0, 7);
-            int32 line = i + SCREEN_YCENTER;
+        int32 bank = CLAMP((abs(pos) >> 15) - 8, 0, 7);
+        int32 line = i + SCREEN_YCENTER;
 
-            if (bank != bandBank) {
-                if (bandBank >= 0)
-                    RSDK.SetActivePalette(bandBank, bandStart, line);
-                bandStart = line;
-                bandBank  = bank;
-            }
+        if (bank != bandBank) {
+            if (bandBank >= 0)
+                RSDK.SetActivePalette(bandBank, bandStart, line);
+            bandStart = line;
+            bandBank  = bank;
         }
 
         scanlines->position.x = (sin * pos - ScreenInfo->center.x * scanlines->deform.x) + camera->position.x;
@@ -358,9 +330,7 @@ void UFO_Setup_Scanline_3DFloor(ScanlineInfo *scanlines)
         scanlines++;
     }
 
-    if (ss7_pin_bank)
-        RSDK.SetActivePalette(0, 0, SCREEN_YSIZE);
-    else if (bandBank >= 0)
+    if (bandBank >= 0)
         RSDK.SetActivePalette(bandBank, bandStart, SCREEN_YSIZE);
 }
 void UFO_Setup_Scanline_3DRoof(ScanlineInfo *scanlines)
@@ -388,44 +358,26 @@ void UFO_Setup_Scanline_3DRoof(ScanlineInfo *scanlines)
     int32 bandStart = 0;
     int32 bandBank  = -1;
 
-    // See Scanline_Playfield above re: SS7 bank-pinning. Roof needs the
-    // same fix because (a) UFO7 has a 3D Roof tile layer overhead that
-    // would still strobe and (b) tile-layer callbacks fire in iteration
-    // order, so the roof callback's SetActivePalette writes overwrite the
-    // floor's pinned state for any subsequent sprite/entity draws.
-#if defined(RSDK_USE_MISTER)
-    bool32 ss7_pin_bank = UFO_Camera->isSS7;
-#else
-    bool32 ss7_pin_bank = false;
-#endif
-
     for (int32 i = -SCREEN_YCENTER; i < SCREEN_YCENTER; ++i) {
         int32 h             = (int32)(((long long)height * ufo_setup_recip_table[i + SCREEN_YCENTER]) >> UFO_SETUP_RECIP_SHIFT);
         scanlines->deform.x = -(cos * h) >> 8;
         scanlines->deform.y = (sin * h) >> 8;
 
         int32 pos  = ((cosX * h) >> 8) - (sinX * ((i * h) >> 8) >> 8);
-        if (!ss7_pin_bank) {
-            int32 bank = CLAMP(abs(pos) >> 14, 0, 7);
-            int32 line = i + SCREEN_YCENTER;
+        int32 bank = CLAMP(abs(pos) >> 14, 0, 7);
+        int32 line = i + SCREEN_YCENTER;
 
-            if (bank != bandBank) {
-                if (bandBank >= 0)
-                    RSDK.SetActivePalette(bandBank, bandStart, line);
-                bandStart = line;
-                bandBank  = bank;
-            }
+        if (bank != bandBank) {
+            if (bandBank >= 0)
+                RSDK.SetActivePalette(bandBank, bandStart, line);
+            bandStart = line;
+            bandBank  = bank;
         }
 
         scanlines->position.x = (sin * pos - ScreenInfo->center.x * scanlines->deform.x) + (camera->position.x >> 3);
         scanlines->position.y = (cos * pos - ScreenInfo->center.x * scanlines->deform.y) + (camera->position.y >> 3);
 
         scanlines++;
-    }
-
-    if (ss7_pin_bank) {
-        RSDK.SetActivePalette(0, 0, SCREEN_YSIZE);
-        return;
     }
 
     if (bandBank >= 0)
