@@ -121,7 +121,23 @@ void UFO_Player_Create(void *data)
 
         UFO_Player_ChangeMachState();
         self->stateInput   = UFO_Player_Input_P1;
+        // Upstream sets controllerID = INPUT_NONE (= 0 = CONT_ANY), which makes
+        // UFO_Player_Input_P1 read from the merged-across-all-devices CONT_ANY
+        // slot rather than a player-specific slot. SDL2InputDevice::UpdateInput
+        // and MiSTerJoyInputDevice::UpdateInput both pump ProcessInput(CONT_ANY)
+        // unconditionally for every device each frame, regardless of slot
+        // assignment -- so any unassigned input source (e.g. the MiSTer joy
+        // SHM device on a MiSTercade where firmware reports a stuck JOY_LEFT
+        // bit) leaks directional input into UFO without affecting regular
+        // gameplay (Player.c uses CONT_P1+, slot-isolated). Read from CONT_P1
+        // on MiSTer so UFO honors only the player-assigned device. Reported
+        // bug: UFO Special Stage character drifts left without input on
+        // MiSTercade 2 and a regular MiSTer setup.
+#if defined(RSDK_USE_MISTER)
+        self->controllerID = CONT_P1;
+#else
         self->controllerID = INPUT_NONE;
+#endif
         self->state        = UFO_Player_State_Run;
 
         RSDK.SetModelAnimation(UFO_Player->jogModel, &self->animator, 128, 0, true, 0);

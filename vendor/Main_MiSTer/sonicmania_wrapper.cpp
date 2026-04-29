@@ -3098,6 +3098,38 @@ int sonicmania_wrapper_run(int argc, char *argv[])
 		}
 
 		cleanup_joy_shm();
+
+		// If the engine exited with a non-zero code (NOT a signal, NOT a
+		// user-driven restart, NOT a wrapper-forced quit -- those branches
+		// returned earlier above), surface an OSD diagnostic before kicking
+		// the user back to the menu. Otherwise the symptom is "black screen
+		// for a moment, then back at the MiSTer menu" with zero indication
+		// of what happened. Common causes: corrupt RSDKv5U binary or
+		// libtheora .so from a mis-aborted FTP transfer (FileZilla in
+		// binary mode can still produce truncated files on flaky network
+		// links), Data.rsdk parse error mid-run that the pre-flight magic
+		// check didn't catch, runtime SIGABRT from a libc assertion. Any
+		// non-zero exit on this path is unexpected.
+		//
+		// The earlier branches handle the cases we DON'T want to OSD:
+		//   - exec_read > 0       => "Failed to launch ..." OSD (handled)
+		//   - g_wrapper_signal    => silent (wrapper itself was signaled)
+		//   - forced              => silent (caller chose to bail out)
+		//   - restart_requested   => loop back, not exit
+		// Reaching this point means: engine ran, then exited on its own,
+		// with exit_code stored from wait_for_child. Nonzero is the
+		// abnormal-termination case.
+		if (exit_code != 0)
+		{
+			char message[128] = {};
+			// OSD is 32 chars per line, max 7 lines (show_wrapper_message
+			// at line 1910 / split_message_line). Keep each line <=32 ch.
+			snprintf(message, sizeof(message),
+			         "Sonic Mania exited unexpectedly\nexit_code=%d\nRe-copy files in binary FTP mode",
+			         exit_code);
+			return show_error_and_return(message, wrapper_log, active_vt, saved_stdout, saved_stderr);
+		}
+
 		restart_to_menu(wrapper_log, saved_stdout, saved_stderr, runtime_vt);
 		return exit_code;
 	}
