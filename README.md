@@ -41,7 +41,7 @@ See [docs/building-mister.md](docs/building-mister.md) for the engine-binary bui
 
 ## Known issues
 
-**UFO Special Stage decorations are hidden.** Trees, flowers, pillars, birds, and fish are skipped in the Special Stage minigames so the Cortex-A9 can sustain 60 Hz — they were costing ~22 ms peak on a 16.6 ms budget. Gameplay impact is zero (no collision, no state machine in upstream Mania either); the world just looks emptier. Reversible by dropping the `#if defined(RSDK_USE_MISTER) return;` guards in `SonicMania/Objects/UFO/UFO_Decoration.c`.
+~~**UFO Special Stage decorations are hidden.** Trees, flowers, pillars, birds, and fish are skipped to sustain 60 Hz on the Cortex-A9.~~ Fixed in 0.3.0 — thanks to [@gibletto](https://github.com/gibletto)!
 
 ## AI Collaboration Disclosure
 
