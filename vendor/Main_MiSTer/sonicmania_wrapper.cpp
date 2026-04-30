@@ -2514,7 +2514,19 @@ int wait_for_child(pid_t child, bool service_ui)
 			if (g_joy_shm)
 			{
 				uint32_t masks[MISTER_JOY_MAX_PLAYERS];
-				if (input_btncheck_active) {
+				// Zero SHM masks during the button-binding wizard (so the
+				// wizard's transient inputs don't leak into the running
+				// child) AND while the OSD is visible (so the user
+				// navigating the menu doesn't double-trigger game actions
+				// via the SHM input path). The latter matters because
+				// input_set_joy_passthrough(1) at line 3035 disables
+				// upstream's own (!grabbed || osd) zeroing branch in
+				// input.cpp:6038 — passthrough keeps live joy_mask_export
+				// flowing into input_get_joy_mask() regardless of OSD
+				// state, so we have to suppress here. Companion to the
+				// EVIOCGRAB edge logic below; that fix covers the SDL2/
+				// evdev side, this one covers the SHM side.
+				if (input_btncheck_active || user_io_osd_is_visible()) {
 					memset(masks, 0, sizeof(masks));
 				} else {
 					input_get_joy_mask(masks, MISTER_JOY_MAX_PLAYERS);
@@ -2527,6 +2539,33 @@ int wait_for_child(pid_t child, bool service_ui)
 		poll_status_changes(child);
 		HandleUI();
 		OsdUpdate();
+
+		// OSD-visibility edge: re-apply EVIOCGRAB to all open evdev fds so
+		// SDL2 in the child game stops seeing input while the menu is up.
+		// Background: this port runs Main_MiSTer's input.cpp with
+		// `static int grabbed = 0` (input.cpp:1419) so SDL2 in the engine
+		// can read /dev/input/event* alongside the wrapper. Upstream's
+		// device-open path (input.cpp:5210) bakes in
+		// `(grabbed | user_io_osd_is_visible())` at open-time, but never
+		// re-applies on later visibility transitions — so a pad already
+		// plugged in at boot keeps EVIOCGRAB=0 forever, and SDL2 keeps
+		// receiving events while the OSD is open. Calling input_switch(-1)
+		// preserves `grabbed` and re-evaluates the ioctl across every fd.
+		// Companion to the SHM-side hole, which is closed by the osd-visible
+		// check on the input_get_joy_mask() call further up in this same
+		// loop body — needed because input_set_joy_passthrough(1) at line
+		// 3035 disables upstream's own (!grabbed || osd) zeroing branch
+		// at input.cpp:6038.
+		// See github.com/kimchiman52/sonic-mania-mister/issues/3.
+		{
+			static char prev_osd_visible = 0;
+			char now_osd_visible = user_io_osd_is_visible();
+			if (now_osd_visible != prev_osd_visible)
+			{
+				input_switch(-1);
+				prev_osd_visible = now_osd_visible;
+			}
+		}
 
 		usleep(1000);
 	}
