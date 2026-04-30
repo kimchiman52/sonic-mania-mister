@@ -43,7 +43,13 @@ if(PORT_MISTER)
     # also re-FORCEd inside platforms/MiSTer.cmake as belt-and-braces.
     set(RETRO_SUBSYSTEM "MiSTer" CACHE STRING "MiSTer: native render backend" FORCE)
     set(USE_SDL_AUDIO ON CACHE BOOL "MiSTer: force SDL audio" FORCE)
-    set(RETRO_DISABLE_PLUS ON CACHE BOOL "MiSTer: disable Plus/DLC content gating" FORCE)
+    # PLUS gating: default to ON for the MiSTer profile (matches the
+    # distribution policy documented in README.md "Plus DLC" section), but
+    # NO `FORCE` — a user passing `-DRETRO_DISABLE_PLUS=off` to enable Plus
+    # content in their own build must win. The README explicitly tells
+    # owners of Sonic Mania Plus to do this; FORCE silently overwrote it.
+    # See github.com/kimchiman52/sonic-mania-mister/issues/5.
+    set(RETRO_DISABLE_PLUS ON CACHE BOOL "MiSTer: disable Plus/DLC content gating")
     set(PLATFORM "MiSTer" CACHE STRING "MiSTer: platform dispatch" FORCE)
 endif()
 
